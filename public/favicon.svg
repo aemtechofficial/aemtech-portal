@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="14" fill="#0a0a0a"/>
+  <text x="32" y="28" text-anchor="middle" font-family="Arial,sans-serif" font-weight="900" font-size="16" letter-spacing="1">
+    <tspan fill="#ffffff">AEM</tspan><tspan fill="#FFD700">T</tspan>
+  </text>
+  <text x="32" y="46" text-anchor="middle" font-family="Arial,sans-serif" font-weight="900" font-size="16" letter-spacing="1">
+    <tspan fill="#ffffff">ECH</tspan>
+  </text>
+  <rect x="8" y="54" width="48" height="2" rx="1" fill="#FFD700" opacity="0.5"/>
+</svg>
