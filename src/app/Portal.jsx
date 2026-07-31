@@ -34,7 +34,12 @@ function AuthProvider({ children }) {
         if (data.password_hash !== password) { toast.error('Wrong password'); return false }
         setSession({ user: data, role: 'admin' }); toast.success(`Welcome, ${data.full_name}! 👋`); return true
       } else {
-        const { data } = await sb.from('students').select('*').eq('email', email).single()
+        // Try login_email first, then fallback to personal email
+        let { data } = await sb.from('students').select('*').eq('login_email', email).single()
+        if (!data) {
+          const res = await sb.from('students').select('*').eq('email', email).single()
+          data = res.data
+        }
         if (!data) { toast.error('Student not found'); return false }
         if (data.password !== password) { toast.error('Wrong password'); return false }
         setSession({ user: data, role: 'student' }); toast.success(`Welcome, ${data.full_name}! 👋`); return true
@@ -644,7 +649,7 @@ function LoginPage() {
             ))}
           </div>
 
-          <Inp label="Email Address" icon="📧" type="email" placeholder="Enter your email" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && go()} />
+          <Inp label="Login Email" icon="🔐" type="email" placeholder="Enter your login email" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && go()} />
           <Inp label="Password" icon="🔒" type={showPass ? 'text' : 'password'} placeholder="Enter your password" value={pass} onChange={e => setPass(e.target.value)} onKeyDown={e => e.key === 'Enter' && go()} />
           
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:-8, marginBottom:22 }}>
@@ -1050,7 +1055,7 @@ function StudentsPage() {
     let msg=templates[templateKey]||''
     if(!msg){toast.error('Template not found! Go to Settings → WhatsApp Templates');return}
     msg=msg.replace(/{name}/g,student.full_name||'')
-           .replace(/{email}/g,student.email||'')
+           .replace(/{email}/g,student.login_email||student.email||'')
            .replace(/{password}/g,student.password||'12345678')
            .replace(/{fee}/g,currency(student.fee_amount))
            .replace(/{paid}/g,currency(student.fee_paid))
@@ -1114,7 +1119,7 @@ function StudentsPage() {
             </div>
           </div>
           <Grid cols="1fr 1fr 1fr 1fr" gap={14}>
-            {[['👨 Father','Father/Guardian',viewStudent.father_name||'—'],['📱 Guardian Ph',viewStudent.guardian_phone||'—'],['🏙️ City',viewStudent.city||'—'],['🎓 Education',viewStudent.education||'—'],['🎂 DOB',viewStudent.dob?fmtDate(viewStudent.dob):'—'],['📅 Age',viewStudent.dob?calcAge(viewStudent.dob)+' years':viewStudent.age?viewStudent.age+' years':'—'],['💰 Monthly Fee',currency(viewStudent.fee_amount)],['✅ Total Paid',currency(viewStudent.fee_paid)],['⚠️ Due',currency((viewStudent.fee_amount||0)-(viewStudent.fee_paid||0))],['🔗 Referred By',viewStudent.referred_by||'—'],['📋 Referral Name',viewStudent.referral_name||'—'],['📅 Enrolled',fmtDate(viewStudent.created_at)]].map(([icon,v])=>(
+            {[['🔐 Login Email',viewStudent.login_email||viewStudent.email],['👨 Father',viewStudent.father_name||'—'],['📱 Guardian Ph',viewStudent.guardian_phone||'—'],['🏙️ City',viewStudent.city||'—'],['🎓 Education',viewStudent.education||'—'],['🎂 DOB',viewStudent.dob?fmtDate(viewStudent.dob):'—'],['📅 Age',viewStudent.dob?calcAge(viewStudent.dob)+' years':viewStudent.age?viewStudent.age+' years':'—'],['💰 Monthly Fee',currency(viewStudent.fee_amount)],['✅ Total Paid',currency(viewStudent.fee_paid)],['⚠️ Due',currency((viewStudent.fee_amount||0)-(viewStudent.fee_paid||0))],['🔗 Referred By',viewStudent.referred_by||'—'],['📋 Referral Name',viewStudent.referral_name||'—'],['📅 Enrolled',fmtDate(viewStudent.created_at)]].map(([icon,v])=>(
               <div key={icon} style={{...getGlassLight(dark),borderRadius:14,padding:16}}>
                 <div style={{fontSize:10,color:'#6B7280',marginBottom:5}}>{icon}</div>
                 <div style={{fontWeight:600,fontSize:13,color:dark?'#E5E7EB':'#1F2937'}}>{v}</div>
@@ -1150,10 +1155,11 @@ function StudentsPage() {
           <Sel label="Referred By" value={form.referred_by||''} onChange={e=>setForm({...form,referred_by:e.target.value})}><option value="">Select</option>{REFERRAL_SOURCES.map(r=><option key={r} value={r}>{r}</option>)}</Sel>
           <Inp label="Referral Name" value={form.referral_name||''} onChange={e=>setForm({...form,referral_name:e.target.value})} placeholder="If friend" helper="Who referred"/>
         </Grid>
-        <div style={{fontSize:12,fontWeight:700,color:'#FFD700',marginBottom:18,marginTop:10,textTransform:'uppercase',letterSpacing:1.5,display:'flex',alignItems:'center',gap:8}}><div style={{width:3,height:14,background:G,borderRadius:3}}/>Fee & Account</div>
+        <div style={{fontSize:12,fontWeight:700,color:'#FFD700',marginBottom:18,marginTop:10,textTransform:'uppercase',letterSpacing:1.5,display:'flex',alignItems:'center',gap:8}}><div style={{width:3,height:14,background:G,borderRadius:3}}/>Login & Account</div>
         <Grid>
-          <Inp label="Monthly Fee (PKR)" type="number" value={form.fee_amount||''} onChange={e=>setForm({...form,fee_amount:e.target.value})} placeholder="5000"/>
+          <Inp label="Login Email" required value={form.login_email||''} onChange={e=>setForm({...form,login_email:e.target.value})} placeholder="student.login@example.com" icon="🔐" helper="Student isse login karega"/>
           <Inp label="Password" value={form.password||'12345678'} onChange={e=>setForm({...form,password:e.target.value})} helper="Default: 12345678"/>
+          <Inp label="Monthly Fee (PKR)" type="number" value={form.fee_amount||''} onChange={e=>setForm({...form,fee_amount:e.target.value})} placeholder="5000"/>
           <Sel label="Fee Status" value={form.fee_status||'pending'} onChange={e=>setForm({...form,fee_status:e.target.value})}><option value="pending">Pending</option><option value="partial">Partial</option><option value="paid">Paid</option></Sel>
           <Sel label="Status" value={form.status||'active'} onChange={e=>setForm({...form,status:e.target.value})}><option value="active">Active</option><option value="inactive">Inactive</option><option value="graduated">Graduated</option></Sel>
         </Grid>
@@ -2462,6 +2468,7 @@ function StudentProfilePage() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 14, marginBottom: 26 }}>
           {[
             ['📧 Email', st.email],
+            ['🔐 Login Email', st.login_email || st.email],
             ['📱 Phone', st.phone || '—'],
             ['👨 Father', st.father_name || '—'],
             ['🏙️ City', st.city || '—'],
