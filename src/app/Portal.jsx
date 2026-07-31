@@ -131,7 +131,7 @@ const Logo = ({ size=22, tag=false }) => {
   </div>
 }
 
-const Av = ({ name, size=38, glow=false, onClick }) => (
+const Av = ({ name, src=null, size=38, glow=false, onClick }) => (
   <div onClick={onClick} style={{
     width:size, height:size, borderRadius:'50%',
     background:'linear-gradient(135deg,#FFD700,#FFA500,#FF8C00)', display:'inline-flex', alignItems:'center', justifyContent:'center',
@@ -142,7 +142,8 @@ const Av = ({ name, size=38, glow=false, onClick }) => (
     cursor: onClick ? 'pointer' : 'default',
     transition: 'all .3s ease',
     letterSpacing:.5,
-  }}>{initials(name)}</div>
+    overflow:'hidden',
+  }}>{src ? <img src={src} alt={name||'Avatar'} style={{width:'100%',height:'100%',objectFit:'cover'}}/> : initials(name)}</div>
 )
 
 const Bdg = ({ children, type='gold', size='md', dot=false }) => {
@@ -906,7 +907,7 @@ function AdminDashboard() {
         <Card title="👥 Recent Students" icon="👥" delay={.4}>
           {recent.length === 0 ? <Empty icon="👥" title="No students" /> : recent.map((s, i) => (
             <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '13px 0', borderBottom: `1px solid ${dark ? 'rgba(255,255,255,.02)' : 'rgba(0,0,0,.03)'}`, animation: `fadeIn .4s ease ${i * .08}s both` }}>
-              <Av name={s.full_name} size={42} />
+              <Av name={s.full_name} src={s.profile_image||null} size={42} />
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 14, fontWeight: 600, color: dark ? '#E5E7EB' : '#1F2937' }}>{s.full_name}</div>
                 <div style={{ fontSize: 11, color: '#4B5563' }}>{s.father_name ? `S/O ${s.father_name} · ` : ''}{s.city || 'Pakistan'}{s.referred_by ? ` · via ${s.referred_by}` : ''}</div>
@@ -939,7 +940,7 @@ function AdminDashboard() {
 // STUDENTS — Sexy Premium + Filters
 // ═══════════════════════════════════════
 function StudentsPage() {
-  const [students,setStudents]=useState([]); const [batches,setBatches]=useState([]); const [loading,setLoading]=useState(true); const [search,setSearch]=useState(''); const [modal,setModal]=useState(null); const [form,setForm]=useState({}); const [importing,setImporting]=useState(false); const [viewStudent,setViewStudent]=useState(null); const [filters,setFilters]=useState({}); const {dark}=useTheme()
+  const [students,setStudents]=useState([]); const [batches,setBatches]=useState([]); const [loading,setLoading]=useState(true); const [search,setSearch]=useState(''); const [modal,setModal]=useState(null); const [form,setForm]=useState({}); const [importing,setImporting]=useState(false); const [viewStudent,setViewStudent]=useState(null); const [filters,setFilters]=useState({}); const [imgUploading,setImgUploading]=useState(false); const {dark}=useTheme()
 
   const load=useCallback(async()=>{setLoading(true);const[s,b]=await Promise.all([sb.from('students').select('*').order('created_at',{ascending:false}),sb.from('batches').select('*')]);setStudents(s.data||[]);setBatches(b.data||[]);setLoading(false)},[])
   useEffect(()=>{load()},[load])
@@ -972,6 +973,45 @@ function StudentsPage() {
   }
 
   const del=async(id,name)=>{if(!confirm(`Delete ${name}?`))return;await sb.from('attendance').delete().eq('student_id',id);await sb.from('submissions').delete().eq('student_id',id);await sb.from('fee_payments').delete().eq('student_id',id);await sb.from('students').delete().eq('id',id);toast.success('Deleted');load()}
+
+  const removeStudentImage = async (student) => {
+    if (!student?.id) return
+    if (!confirm(`Remove profile image for ${student.full_name}?`)) return
+    const { error } = await sb.from('students').update({ profile_image: null }).eq('id', student.id)
+    if (error) { toast.error(error.message || 'Failed to remove image'); return }
+    setStudents(prev => prev.map(s => s.id === student.id ? { ...s, profile_image: null } : s))
+    if (viewStudent?.id === student.id) setViewStudent({ ...viewStudent, profile_image: null })
+    toast.success('Profile image removed 🗑️')
+  }
+
+  const uploadStudentImage = async (student, e) => {
+    const file = e.target.files?.[0]
+    if (!student?.id || !file) return
+    if (file.size > 2 * 1024 * 1024) { toast.error('Max 2MB allowed!'); e.target.value=''; return }
+    if (!file.type.startsWith('image/')) { toast.error('Only images allowed!'); e.target.value=''; return }
+
+    setImgUploading(true)
+    try {
+      const reader = new FileReader()
+      reader.onload = async (event) => {
+        const base64 = event.target?.result
+        if (!base64) { toast.error('Failed to read file'); setImgUploading(false); return }
+        const { error } = await sb.from('students').update({ profile_image: base64 }).eq('id', student.id)
+        if (error) { toast.error(error.message || 'Failed to save image'); setImgUploading(false); return }
+        setStudents(prev => prev.map(s => s.id === student.id ? { ...s, profile_image: base64 } : s))
+        if (viewStudent?.id === student.id) setViewStudent({ ...viewStudent, profile_image: base64 })
+        toast.success('Student photo updated 📸')
+        setImgUploading(false)
+      }
+      reader.onerror = () => { toast.error('Failed to read file'); setImgUploading(false) }
+      reader.readAsDataURL(file)
+    } catch {
+      toast.error('Upload failed')
+      setImgUploading(false)
+    } finally {
+      e.target.value = ''
+    }
+  }
 
   const doExport=()=>exportXLS(students.map(s=>({'Full Name':s.full_name,Email:s.email,Phone:s.phone||'',City:s.city||'','Father/Guardian':s.father_name||'','Guardian Phone':s.guardian_phone||'',DOB:s.dob||'',Age:s.age||calcAge(s.dob)||'',Gender:s.gender||'','Referred By':s.referred_by||'',Education:s.education||'',Status:s.status,'Fee Amount':s.fee_amount||0,'Fee Paid':s.fee_paid||0,'Fee Status':s.fee_status||'pending'})),'AEMTECH_Students.xlsx','Students')
 
@@ -1040,7 +1080,7 @@ function StudentsPage() {
         <Tbl headers={['Student','Phone','City','Batch','Fee','Status','Actions']} empty={filtered.length===0?<Empty icon="👥" title="No students" sub="Try adjusting filters"/>:null}>
           {filtered.map((s,i)=>(
             <TR key={s.id} delay={i*.025} onClick={()=>setViewStudent(s)}>
-              <TD><div style={{display:'flex',alignItems:'center',gap:12}}><Av name={s.full_name} size={36}/><div><div style={{fontWeight:700,fontSize:13,color:dark?'#E5E7EB':'#1F2937'}}>{s.full_name}</div><div style={{fontSize:11,color:'#4B5563'}}>{s.email}</div></div></div></TD>
+              <TD><div style={{display:'flex',alignItems:'center',gap:12}}><Av name={s.full_name} src={s.profile_image||null} size={36}/><div><div style={{fontWeight:700,fontSize:13,color:dark?'#E5E7EB':'#1F2937'}}>{s.full_name}</div><div style={{fontSize:11,color:'#4B5563'}}>{s.email}</div></div></div></TD>
               <TD style={{fontSize:12}}>{s.phone||'—'}</TD>
               <TD style={{fontSize:12}}>{s.city||'—'}</TD>
               <TD style={{fontSize:12}}>{batches.find(b=>b.id===s.batch_id)?.name||'—'}</TD>
@@ -1054,10 +1094,10 @@ function StudentsPage() {
 
       {/* Student Profile Modal */}
       <Modal open={!!viewStudent} onClose={()=>setViewStudent(null)} title="Student Profile" icon="👤" large
-        footer={<><Btn type="ghost" onClick={()=>setViewStudent(null)}>Close</Btn><Btn onClick={()=>{setForm(viewStudent);setModal('edit');setViewStudent(null)}}>✏️ Edit</Btn></>}>
+        footer={<><Btn type="ghost" onClick={()=>setViewStudent(null)}>Close</Btn>{viewStudent&&<label style={{display:'inline-block',cursor:imgUploading?'wait':'pointer'}}><Btn type="outline" onClick={()=>{}} loading={imgUploading}>{viewStudent?.profile_image?'📷 Change Photo':'📷 Upload Photo'}</Btn><input type="file" accept="image/*" style={{display:'none'}} onChange={e=>uploadStudentImage(viewStudent,e)} disabled={imgUploading}/></label>}{viewStudent?.profile_image&&<Btn type="danger" onClick={()=>removeStudentImage(viewStudent)}>🗑 Remove Photo</Btn>}<Btn onClick={()=>{setForm(viewStudent);setModal('edit');setViewStudent(null)}}>✏️ Edit</Btn></>}>
         {viewStudent&&<div>
-          <div style={{display:'flex',alignItems:'center',gap:22,marginBottom:28,...getGlassLight(dark),borderRadius:20,padding:24}}>
-            <Av name={viewStudent.full_name} size={74} glow/>
+          <div style={{display:'flex',alignItems:'center',gap:22,marginBottom:28,...getGlassLight(dark),borderRadius:20,padding:24,flexWrap:'wrap'}}>
+            <Av name={viewStudent.full_name} src={viewStudent.profile_image||null} size={74} glow/>
             <div style={{flex:1}}>
               <div style={{fontSize:24,fontWeight:800,color:dark?'#E5E7EB':'#1F2937',marginBottom:5}}>{viewStudent.full_name}</div>
               <div style={{fontSize:14,color:'#6B7280',marginBottom:5}}>{viewStudent.email} · {viewStudent.phone||'No phone'}</div>
@@ -1067,6 +1107,10 @@ function StudentsPage() {
                 {viewStudent.gender&&<Bdg type="info">{viewStudent.gender}</Bdg>}
                 {viewStudent.referred_by&&<Bdg type="gold">via {viewStudent.referred_by}</Bdg>}
               </div>
+            </div>
+            <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+              <label style={{display:'inline-block',cursor:imgUploading?'wait':'pointer'}}><Btn type="outline" size="sm" onClick={()=>{}} loading={imgUploading}>{viewStudent?.profile_image?'📷 Change Photo':'📷 Upload Photo'}</Btn><input type="file" accept="image/*" style={{display:'none'}} onChange={e=>uploadStudentImage(viewStudent,e)} disabled={imgUploading}/></label>
+              {viewStudent.profile_image&&<Btn type="danger" size="sm" onClick={()=>removeStudentImage(viewStudent)}>🗑 Remove Photo</Btn>}
             </div>
           </div>
           <Grid cols="1fr 1fr 1fr 1fr" gap={14}>
@@ -1377,7 +1421,7 @@ body{font-family:'Inter',sans-serif;background:#f5f5f5;padding:40px;display:flex
               <TR key={s.id} delay={i*.025}>
                 <TD>
                   <div style={{display:'flex',alignItems:'center',gap:12}}>
-                    <Av name={s.full_name} size={36}/>
+                    <Av name={s.full_name} src={s.profile_image||null} size={36}/>
                     <div>
                       <div style={{fontWeight:700,fontSize:14,color:dark?'#E5E7EB':'#1F2937'}}>{s.full_name}</div>
                       <div style={{fontSize:11,color:'#6B7280'}}>{s.phone||s.email}</div>
@@ -1432,7 +1476,7 @@ body{font-family:'Inter',sans-serif;background:#f5f5f5;padding:40px;display:flex
       <Modal open={modal==='view'} onClose={()=>setModal(null)} title="📋 Fee Details" large footer={<><Btn type="ghost" onClick={()=>setModal(null)}>Close</Btn>{selectedStudent&&(selectedStudent.fee_paid||0)>0&&<Btn type="warning" onClick={()=>printAdminReceipt(selectedStudent,selectedStudent.fee_paid)} icon="🧾">Print Receipt</Btn>}</>}>
         {selectedStudent&&<>
           <div style={{display:'flex',alignItems:'center',gap:18,marginBottom:28,...getGlassLight(dark),borderRadius:20,padding:24}}>
-            <Av name={selectedStudent.full_name} size={64} glow/>
+            <Av name={selectedStudent.full_name} src={selectedStudent.profile_image||null} size={64} glow/>
             <div>
               <div style={{fontSize:22,fontWeight:800,color:dark?'#E5E7EB':'#1F2937'}}>{selectedStudent.full_name}</div>
               <div style={{fontSize:13,color:'#6B7280'}}>{selectedStudent.email} · {selectedStudent.phone||'—'}</div>
@@ -2398,11 +2442,7 @@ function StudentProfilePage() {
       <Card title="👤 My Profile" icon="👤">
         <div style={{ display: 'flex', alignItems: 'center', gap: 24, marginBottom: 30, padding: 'clamp(18px, 3vw, 28px)', ...getGlassLight(dark), borderRadius: 20, flexWrap: 'wrap' }}>
           <div style={{ position: 'relative' }}>
-            {st.profile_image ? (
-              <img src={st.profile_image} alt={st.full_name} style={{ width: 80, height: 80, borderRadius: '50%', objectFit: 'cover', border: '3px solid rgba(255,215,0,.3)', boxShadow: '0 0 20px rgba(255,215,0,.15)' }} />
-            ) : (
-              <Av name={st.full_name} size={80} glow />
-            )}
+            <Av name={st.full_name} src={st.profile_image||null} size={80} glow />
             <label style={{ position: 'absolute', bottom: -4, right: -4, width: 28, height: 28, borderRadius: '50%', background: '#FFD700', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: uploading ? 'wait' : 'pointer', fontSize: 14, boxShadow: '0 2px 8px rgba(0,0,0,.3)', border: '2px solid #000' }}>
               {uploading ? <span style={{ width: 12, height: 12, border: '2px solid #000', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin .6s linear infinite' }} /> : '📷'}
               <input type="file" accept="image/*" style={{ display: 'none' }} onChange={uploadProfileImage} disabled={uploading} />
