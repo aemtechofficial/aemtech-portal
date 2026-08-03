@@ -1047,7 +1047,7 @@ function StudentsPage() {
     for (const s of students) {
       let loginEmail = s.login_email
       if (!loginEmail || bulkForm.overwrite) {
-        const name = (s.full_name||'').toLowerCase().replace(/\s+/g,'.')
+        const name = (s.full_name||'').toLowerCase().replace(/\s+/g,'')
         if (bulkForm.pattern === 'name') loginEmail = name + '@aemtech.com'
         else if (bulkForm.pattern === 'phone') loginEmail = (s.phone||'').replace(/\D/g,'') + '@aemtech.com'
         else if (bulkForm.pattern === 'custom') loginEmail = name + (bulkForm.domain || '@aemtech.com')
@@ -1226,7 +1226,7 @@ function StudentsPage() {
         </div>
 
         <Sel label="Login Email Pattern" value={bulkForm.pattern} onChange={e=>setBulkForm({...bulkForm,pattern:e.target.value})}>
-          <option value="name">📧 Name based — ahmed.khan@aemtech.com</option>
+          <option value="name">📧 Name based — ahmedkhan@aemtech.com</option>
           <option value="phone">📱 Phone based — 03001234567@aemtech.com</option>
           <option value="custom">✏️ Custom domain — name + your domain</option>
         </Sel>
@@ -1258,7 +1258,7 @@ function StudentsPage() {
           <div style={{fontSize:12,fontWeight:700,color:'#FFD700',marginBottom:12,textTransform:'uppercase',letterSpacing:1.5}}>Preview</div>
           <div style={{...getGlassLight(dark),borderRadius:14,padding:16,maxHeight:200,overflowY:'auto'}} className="cs">
             {students.slice(0,5).map(s=>{
-              const name=(s.full_name||'').toLowerCase().replace(/\s+/g,'.')
+              const name=(s.full_name||'').toLowerCase().replace(/\s+/g,'')
               let preview=''
               if(bulkForm.pattern==='name') preview=name+'@aemtech.com'
               else if(bulkForm.pattern==='phone') preview=(s.phone||'').replace(/\D/g,'')+'@aemtech.com'
