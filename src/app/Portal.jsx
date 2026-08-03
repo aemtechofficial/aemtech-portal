@@ -962,11 +962,13 @@ function StudentsPage() {
   })
 
   const save=async()=>{
-    if(!form.full_name||!form.email){toast.error('Name and email required');return}
-    const saveData={...form}; if(saveData.dob) saveData.age=calcAge(saveData.dob)
+    if(!form.full_name||!form.email){toast.error('Name and personal email required');return}
+    const saveData={...form,login_email:form.login_email||form.email}; if(saveData.dob) saveData.age=calcAge(saveData.dob)
     if(modal==='add'){
-      const{data:existing}=await sb.from('students').select('id').eq('email',form.email).maybeSingle()
-      if(existing){toast.error('Email exists!');return}
+      const{data:existingEmail}=await sb.from('students').select('id').eq('email',form.email).maybeSingle()
+      if(existingEmail){toast.error('Personal email exists!');return}
+      const{data:existingLogin}=await sb.from('students').select('id').eq('login_email',saveData.login_email).maybeSingle()
+      if(existingLogin){toast.error('Login email exists!');return}
       const{error}=await sb.from('students').insert({...saveData,status:'active',fee_status:'pending',password:form.password||'12345678'})
       if(error){toast.error(error.message);return};toast.success('Added! 🎉')
     } else {
@@ -1018,13 +1020,13 @@ function StudentsPage() {
     }
   }
 
-  const doExport=()=>exportXLS(students.map(s=>({'Full Name':s.full_name,Email:s.email,Phone:s.phone||'',City:s.city||'','Father/Guardian':s.father_name||'','Guardian Phone':s.guardian_phone||'',DOB:s.dob||'',Age:s.age||calcAge(s.dob)||'',Gender:s.gender||'','Referred By':s.referred_by||'',Education:s.education||'',Status:s.status,'Fee Amount':s.fee_amount||0,'Fee Paid':s.fee_paid||0,'Fee Status':s.fee_status||'pending'})),'AEMTECH_Students.xlsx','Students')
+  const doExport=()=>exportXLS(students.map(s=>({'Full Name':s.full_name,'Personal Email':s.email,'Login Email':s.login_email||s.email,Phone:s.phone||'',City:s.city||'','Father/Guardian':s.father_name||'','Guardian Phone':s.guardian_phone||'',DOB:s.dob||'',Age:s.age||calcAge(s.dob)||'',Gender:s.gender||'','Referred By':s.referred_by||'',Education:s.education||'',Status:s.status,'Fee Amount':s.fee_amount||0,'Fee Paid':s.fee_paid||0,'Fee Status':s.fee_status||'pending'})),'AEMTECH_Students.xlsx','Students')
 
   const doImport=async e=>{
     const file=e.target.files[0];if(!file)return;setImporting(true)
     try{
       const data=await new Promise((res,rej)=>{const r=new FileReader();r.onload=ev=>{try{const wb=XLSX.read(ev.target.result,{type:'array'});res(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]))}catch(err){rej(err)}};r.readAsArrayBuffer(file)})
-      const records=data.map(r=>({full_name:r['Full Name']||r.full_name||r.Name||'',email:r.Email||r.email||'',phone:r.Phone||r.phone||'',city:r.City||r.city||'',education:r.Education||r.education||'',father_name:r['Father/Guardian']||r.father_name||r['Father Name']||'',guardian_phone:r['Guardian Phone']||r.guardian_phone||'',gender:r.Gender||r.gender||'male',referred_by:r['Referred By']||r.referred_by||'',status:'active',fee_status:'pending',password:'12345678',fee_amount:parseFloat(r['Fee Amount']||r.fee_amount||0)})).filter(r=>r.full_name&&r.email)
+      const records=data.map(r=>({full_name:r['Full Name']||r.full_name||r.Name||'',email:r.Email||r.email||'',login_email:r['Login Email']||r.login_email||r['Portal Email']||r.Email||r.email||'',phone:r.Phone||r.phone||'',city:r.City||r.city||'',education:r.Education||r.education||'',father_name:r['Father/Guardian']||r.father_name||r['Father Name']||'',guardian_phone:r['Guardian Phone']||r.guardian_phone||'',gender:r.Gender||r.gender||'male',referred_by:r['Referred By']||r.referred_by||'',status:'active',fee_status:'pending',password:'12345678',fee_amount:parseFloat(r['Fee Amount']||r.fee_amount||0)})).filter(r=>r.full_name&&r.email)
       if(!records.length){toast.error('No valid records');return}
       const{error}=await sb.from('students').insert(records);if(error){toast.error(error.message);return}
       toast.success(`${records.length} imported! 🎉`);load()
@@ -1034,6 +1036,32 @@ function StudentsPage() {
   const uniqueCities=[...new Set(students.map(s=>s.city).filter(Boolean))]
   const [waModal,setWaModal]=useState(null)
   const [selectedTemplate,setSelectedTemplate]=useState('welcome')
+  const [bulkModal,setBulkModal]=useState(false)
+  const [bulkForm,setBulkForm]=useState({pattern:'name',password:'12345678'})
+  const [bulkUpdating,setBulkUpdating]=useState(false)
+  
+  const bulkUpdateLogins = async () => {
+    if(!confirm(`${students.length} students ka login email aur password update hoga. Confirm?`)) return
+    setBulkUpdating(true)
+    let count = 0
+    for (const s of students) {
+      let loginEmail = s.login_email
+      if (!loginEmail || bulkForm.overwrite) {
+        const name = (s.full_name||'').toLowerCase().replace(/\s+/g,'.')
+        if (bulkForm.pattern === 'name') loginEmail = name + '@aemtech.com'
+        else if (bulkForm.pattern === 'phone') loginEmail = (s.phone||'').replace(/\D/g,'') + '@aemtech.com'
+        else if (bulkForm.pattern === 'custom') loginEmail = name + (bulkForm.domain || '@aemtech.com')
+      }
+      const updates = { login_email: loginEmail }
+      if (bulkForm.resetPass) updates.password = bulkForm.password || '12345678'
+      await sb.from('students').update(updates).eq('id', s.id)
+      count++
+    }
+    toast.success(`${count} students updated! ✅`)
+    setBulkUpdating(false)
+    setBulkModal(false)
+    load()
+  }
   
   const getTemplates=()=>{
     if(typeof window==='undefined')return{}
@@ -1080,6 +1108,7 @@ function StudentsPage() {
           <Btn type="success" size="sm" onClick={doExport} icon="📊">Export</Btn>
           <label style={{cursor:'pointer'}}><Btn type="warning" size="sm" icon="📥" loading={importing}>Import</Btn><input type="file" accept=".xlsx,.xls,.csv" style={{display:'none'}} onChange={doImport} disabled={importing}/></label>
           <Btn type="outline" size="sm" icon="📊" onClick={()=>openSheet('students')}>Sheet</Btn>
+          <Btn type="ghost" size="sm" icon="🔄" onClick={()=>setBulkModal(true)}>Bulk</Btn>
           <Btn onClick={()=>{setForm({password:'12345678',gender:'male'});setModal('add')}} icon="➕">Add</Btn>
         </div>} noPadding>
         <Tbl headers={['Student','Phone','City','Batch','Fee','Status','Actions']} empty={filtered.length===0?<Empty icon="👥" title="No students" sub="Try adjusting filters"/>:null}>
@@ -1105,7 +1134,8 @@ function StudentsPage() {
             <Av name={viewStudent.full_name} src={viewStudent.profile_image||null} size={74} glow/>
             <div style={{flex:1}}>
               <div style={{fontSize:24,fontWeight:800,color:dark?'#E5E7EB':'#1F2937',marginBottom:5}}>{viewStudent.full_name}</div>
-              <div style={{fontSize:14,color:'#6B7280',marginBottom:5}}>{viewStudent.email} · {viewStudent.phone||'No phone'}</div>
+              <div style={{fontSize:14,color:'#6B7280',marginBottom:4}}>{viewStudent.email} · {viewStudent.phone||'No phone'}</div>
+              <div style={{fontSize:12,color:'#FFD700',marginBottom:5}}>🔐 Login: {viewStudent.login_email||viewStudent.email}</div>
               <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
                 <Bdg type={statusBadge(viewStudent.status)} dot>{viewStudent.status}</Bdg>
                 <Bdg type={statusBadge(viewStudent.fee_status)} dot>{viewStudent.fee_status||'pending'}</Bdg>
@@ -1137,7 +1167,8 @@ function StudentsPage() {
         <div style={{fontSize:12,fontWeight:700,color:'#FFD700',marginBottom:18,textTransform:'uppercase',letterSpacing:1.5,display:'flex',alignItems:'center',gap:8}}><div style={{width:3,height:14,background:G,borderRadius:3}}/>Personal Information</div>
         <Grid>
           <Inp label="Full Name" required value={form.full_name||''} onChange={e=>setForm({...form,full_name:e.target.value})} placeholder="Student name"/>
-          <Inp label="Email" required type="email" value={form.email||''} onChange={e=>setForm({...form,email:e.target.value})} placeholder="email@example.com"/>
+          <Inp label="Personal Email" required type="email" value={form.email||''} onChange={e=>setForm({...form,email:e.target.value})} placeholder="personal@example.com" helper="Record keeping / contact"/>
+          <Inp label="Login Email" required type="email" value={form.login_email||''} onChange={e=>setForm({...form,login_email:e.target.value})} placeholder="login@example.com" helper="Portal login ke liye" icon="🔐"/>
           <Inp label="Phone" value={form.phone||''} onChange={e=>setForm({...form,phone:e.target.value})} placeholder="03001234567"/>
           <Inp label="Date of Birth" type="date" value={form.dob||''} onChange={e=>setForm({...form,dob:e.target.value,age:calcAge(e.target.value)})}/>
           <Sel label="Gender" value={form.gender||'male'} onChange={e=>setForm({...form,gender:e.target.value})}><option value="male">Male</option><option value="female">Female</option><option value="other">Other</option></Sel>
@@ -1157,7 +1188,6 @@ function StudentsPage() {
         </Grid>
         <div style={{fontSize:12,fontWeight:700,color:'#FFD700',marginBottom:18,marginTop:10,textTransform:'uppercase',letterSpacing:1.5,display:'flex',alignItems:'center',gap:8}}><div style={{width:3,height:14,background:G,borderRadius:3}}/>Login & Account</div>
         <Grid>
-          <Inp label="Login Email" required value={form.login_email||''} onChange={e=>setForm({...form,login_email:e.target.value})} placeholder="student.login@example.com" icon="🔐" helper="Student isse login karega"/>
           <Inp label="Password" value={form.password||'12345678'} onChange={e=>setForm({...form,password:e.target.value})} helper="Default: 12345678"/>
           <Inp label="Monthly Fee (PKR)" type="number" value={form.fee_amount||''} onChange={e=>setForm({...form,fee_amount:e.target.value})} placeholder="5000"/>
           <Sel label="Fee Status" value={form.fee_status||'pending'} onChange={e=>setForm({...form,fee_status:e.target.value})}><option value="pending">Pending</option><option value="partial">Partial</option><option value="paid">Paid</option></Sel>
@@ -1185,6 +1215,65 @@ function StudentsPage() {
           </Sel>
           <div style={{fontSize:11,color:'#6B7280',marginTop:12}}>Tip: Go to Settings to customize your message templates.</div>
         </div>}
+      </Modal>
+      
+      {/* Bulk Update Modal */}
+      <Modal open={bulkModal} onClose={()=>setBulkModal(false)} title="🔄 Bulk Update Login Credentials" icon="🔄" large
+        footer={<><Btn type="ghost" onClick={()=>setBulkModal(false)}>Cancel</Btn><Btn type="success" onClick={bulkUpdateLogins} loading={bulkUpdating}>🔄 Update All ({students.length} Students)</Btn></>}>
+        <div style={{...getGlassLight(dark),borderRadius:14,padding:18,marginBottom:22,borderLeft:'3px solid #FFD700'}}>
+          <div style={{fontSize:14,fontWeight:700,color:dark?'#E5E7EB':'#1F2937',marginBottom:6}}>⚡ Bulk Login Email & Password</div>
+          <div style={{fontSize:12,color:'#6B7280'}}>Saare {students.length} students ka login email aur password ek saath set karo</div>
+        </div>
+
+        <Sel label="Login Email Pattern" value={bulkForm.pattern} onChange={e=>setBulkForm({...bulkForm,pattern:e.target.value})}>
+          <option value="name">📧 Name based — ahmed.khan@aemtech.com</option>
+          <option value="phone">📱 Phone based — 03001234567@aemtech.com</option>
+          <option value="custom">✏️ Custom domain — name + your domain</option>
+        </Sel>
+        
+        {bulkForm.pattern==='custom'&&(
+          <Inp label="Custom Domain" value={bulkForm.domain||'@aemtech.com'} onChange={e=>setBulkForm({...bulkForm,domain:e.target.value})} placeholder="@aemtech.com" helper="e.g. @myinstitute.com"/>
+        )}
+        
+        <div style={{marginTop:8,marginBottom:22}}>
+          <label style={{display:'flex',alignItems:'center',gap:10,fontSize:13,color:dark?'#E5E7EB':'#1F2937',cursor:'pointer'}}>
+            <input type="checkbox" checked={bulkForm.overwrite||false} onChange={e=>setBulkForm({...bulkForm,overwrite:e.target.checked})} style={{accentColor:'#FFD700',width:18,height:18}}/>
+            Overwrite existing login emails (already set hain wo bhi change honge)
+          </label>
+        </div>
+
+        <div style={{marginBottom:8}}>
+          <label style={{display:'flex',alignItems:'center',gap:10,fontSize:13,color:dark?'#E5E7EB':'#1F2937',cursor:'pointer'}}>
+            <input type="checkbox" checked={bulkForm.resetPass||false} onChange={e=>setBulkForm({...bulkForm,resetPass:e.target.checked})} style={{accentColor:'#FFD700',width:18,height:18}}/>
+            Sab ka password bhi reset karo
+          </label>
+        </div>
+        
+        {bulkForm.resetPass&&(
+          <Inp label="New Password (sab ke liye)" value={bulkForm.password||'12345678'} onChange={e=>setBulkForm({...bulkForm,password:e.target.value})} placeholder="12345678" icon="🔑"/>
+        )}
+
+        {/* Preview */}
+        <div style={{marginTop:22}}>
+          <div style={{fontSize:12,fontWeight:700,color:'#FFD700',marginBottom:12,textTransform:'uppercase',letterSpacing:1.5}}>Preview</div>
+          <div style={{...getGlassLight(dark),borderRadius:14,padding:16,maxHeight:200,overflowY:'auto'}} className="cs">
+            {students.slice(0,5).map(s=>{
+              const name=(s.full_name||'').toLowerCase().replace(/\s+/g,'.')
+              let preview=''
+              if(bulkForm.pattern==='name') preview=name+'@aemtech.com'
+              else if(bulkForm.pattern==='phone') preview=(s.phone||'').replace(/\D/g,'')+'@aemtech.com'
+              else preview=name+(bulkForm.domain||'@aemtech.com')
+              const show=(!s.login_email||bulkForm.overwrite)?preview:(s.login_email+' (unchanged)')
+              return(
+                <div key={s.id} style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderBottom:`1px solid ${dark?'rgba(255,255,255,.03)':'rgba(0,0,0,.04)'}`,fontSize:13}}>
+                  <span style={{color:dark?'#E5E7EB':'#1F2937',fontWeight:600}}>{s.full_name}</span>
+                  <span style={{color:'#FFD700',fontFamily:"'Space Grotesk',sans-serif"}}>{show}</span>
+                </div>
+              )
+            })}
+            {students.length>5&&<div style={{textAlign:'center',padding:10,fontSize:12,color:'#6B7280'}}>...aur {students.length-5} students</div>}
+          </div>
+        </div>
       </Modal>
     </>
   )
@@ -1725,7 +1814,7 @@ function CertificatesPage(){const[students,setStudents]=useState([]);const[loadi
 
 function SheetSyncPage(){const[syncing,setSyncing]=useState({});const[lastSync,setLastSync]=useState(null);const{dark}=useTheme();const syncData=async type=>{setSyncing(p=>({...p,[type]:true}));try{if(type==='students'){const{data}=await sb.from('students').select('*');await syncToSheet('syncStudents',{students:data||[]});toast.success('Students synced!')};if(type==='attendance'){const[a,s,c]=await Promise.all([sb.from('attendance').select('*'),sb.from('students').select('*'),sb.from('classes').select('*')]);await syncToSheet('syncAttendance',{records:(a.data||[]).map(x=>({student_name:s.data?.find(st=>st.id===x.student_id)?.full_name||'',class_number:c.data?.find(cl=>cl.id===x.class_id)?.class_number||'',class_title:c.data?.find(cl=>cl.id===x.class_id)?.title||'',date:fmtDate(x.marked_at||new Date()),status:x.status}))});toast.success('Attendance synced!')};if(type==='fees'){const{data}=await sb.from('students').select('*');await syncToSheet('syncFees',{students:data||[]});toast.success('Fees synced!')};if(type==='submissions'){const[s,st,a]=await Promise.all([sb.from('submissions').select('*'),sb.from('students').select('*'),sb.from('assignments').select('*')]);await syncToSheet('syncSubmissions',{records:(s.data||[]).map(x=>({student_name:st.data?.find(s=>s.id===x.student_id)?.full_name||'',assignment_title:a.data?.find(a=>a.id===x.assignment_id)?.title||'',submitted_at:x.submitted_at,submission_link:x.submission_link||'',marks_obtained:x.marks_obtained||'',feedback:x.feedback||'',status:x.status}))});toast.success('Submissions synced!')};if(type==='assignments'){const[a,b]=await Promise.all([sb.from('assignments').select('*'),sb.from('batches').select('*')]);await syncToSheet('syncAssignments',{records:(a.data||[]).map(x=>({title:x.title,batch_name:b.data?.find(bt=>bt.id===x.batch_id)?.name||'',due_date:x.due_date,total_marks:x.total_marks,description:x.description||''}))});toast.success('Assignments synced!')};setLastSync(new Date())}catch{toast.error('Failed')}finally{setSyncing(p=>({...p,[type]:false}))}};const syncAll=async()=>{setSyncing({all:true});toast.loading('Syncing...',{id:'all'});try{for(const t of['students','attendance','fees','submissions','assignments'])await syncData(t);setLastSync(new Date());toast.success('Done! 🎉',{id:'all'})}finally{setSyncing({})}};const sheets=[{type:'students',icon:'👥',label:'Students',color:'#10B981'},{type:'attendance',icon:'✅',label:'Attendance',color:'#3B82F6'},{type:'fees',icon:'💰',label:'Fees',color:'#FFD700'},{type:'submissions',icon:'📤',label:'Submissions',color:'#F59E0B'},{type:'assignments',icon:'📝',label:'Assignments',color:'#8B5CF6'}];return(<div><div style={{...getGlass(dark),borderRadius:20,padding:'30px 34px',marginBottom:26,background:dark?'linear-gradient(135deg,rgba(16,185,129,.05),rgba(16,185,129,.015))':'linear-gradient(135deg,rgba(16,185,129,.08),rgba(16,185,129,.03))',animation:'fadeIn .5s ease'}}><div style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:16}}><div><div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:22,fontWeight:800,color:dark?'#E5E7EB':'#1F2937'}}>📊 Sheet Sync</div>{lastSync&&<div style={{fontSize:11,color:'#10B981',marginTop:6}}>✅ Last: {lastSync.toLocaleString()}</div>}</div><div style={{display:'flex',gap:10}}><Btn onClick={syncAll} loading={syncing.all} icon="🔄" style={{background:G2,color:'#fff',border:'none'}}>Sync All</Btn><Btn type="outline" onClick={()=>openSheet()} icon="📊">Open</Btn></div></div></div><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(260px,1fr))',gap:18}}>{sheets.map(({type,icon,label,color})=>(<div key={type} className="ch" style={{...getGlass(dark),borderRadius:18,padding:26,borderTop:`3px solid ${color}`}}><div style={{display:'flex',alignItems:'center',gap:14,marginBottom:18}}><div style={{width:54,height:54,background:`${color}12`,borderRadius:15,display:'flex',alignItems:'center',justifyContent:'center',fontSize:24}}>{icon}</div><div style={{fontSize:17,fontWeight:700,color:dark?'#E5E7EB':'#1F2937'}}>{label}</div></div><div style={{display:'flex',gap:8}}><Btn full loading={syncing[type]} onClick={()=>syncData(type)} style={{background:`${color}15`,color,border:`1px solid ${color}30`,flex:2}} icon="🔄">Sync</Btn><Btn type="ghost" size="sm" onClick={()=>openSheet(type)} icon="↗">View</Btn></div></div>))}</div></div>)}
 
-function ExcelPage(){const[importing,setImporting]=useState(false);const[preview,setPreview]=useState(null);const{dark}=useTheme();const handleImport=async e=>{const file=e.target.files[0];if(!file)return;const data=await new Promise((res,rej)=>{const r=new FileReader();r.onload=ev=>{try{res(XLSX.utils.sheet_to_json(XLSX.read(ev.target.result,{type:'array'}).Sheets[XLSX.read(ev.target.result,{type:'array'}).SheetNames[0]]))}catch(err){rej(err)}};r.readAsArrayBuffer(file)});setPreview({data});e.target.value=''};const confirmImport=async()=>{if(!preview)return;setImporting(true);try{const records=preview.data.map(r=>({full_name:r['Full Name']||r.full_name||r.Name||'',email:r.Email||r.email||'',phone:r.Phone||r.phone||'',city:r.City||r.city||'',education:r.Education||r.education||'',father_name:r['Father/Guardian']||r.father_name||'',gender:r.Gender||r.gender||'male',referred_by:r['Referred By']||r.referred_by||'',status:'active',fee_status:'pending',password:'12345678',fee_amount:parseFloat(r['Fee Amount']||0)})).filter(r=>r.full_name&&r.email);await sb.from('students').insert(records);toast.success(records.length+' imported!');setPreview(null)}finally{setImporting(false)}};const exports=[{label:'👥 Students',fn:async()=>{const{data}=await sb.from('students').select('*');exportXLS(data.map(s=>({Name:s.full_name,Email:s.email,Phone:s.phone||'',City:s.city||'',Father:s.father_name||'',Gender:s.gender||'',Referred:s.referred_by||'',Fee:s.fee_amount||0,Paid:s.fee_paid||0})),'Students.xlsx')}},{label:'💰 Fees',fn:async()=>{const{data}=await sb.from('students').select('*');exportXLS(data.map(s=>({Student:s.full_name,Monthly:s.fee_amount||0,Paid:s.fee_paid||0,Due:(s.fee_amount||0)*3-(s.fee_paid||0),Status:s.fee_status||''})),'Fees.xlsx')}},{label:'✅ Attendance',fn:async()=>{const[a,s,c]=await Promise.all([sb.from('attendance').select('*'),sb.from('students').select('*'),sb.from('classes').select('*')]);exportXLS((a.data||[]).map(x=>({Student:s.data?.find(st=>st.id===x.student_id)?.full_name||'',Class:'C'+(c.data?.find(cl=>cl.id===x.class_id)?.class_number||''),Status:x.status})),'Attendance.xlsx')}},{label:'📤 Submissions',fn:async()=>{const[s,st,a]=await Promise.all([sb.from('submissions').select('*'),sb.from('students').select('*'),sb.from('assignments').select('*')]);exportXLS((s.data||[]).map(x=>({Student:st.data?.find(s=>s.id===x.student_id)?.full_name||'',Assignment:a.data?.find(a=>a.id===x.assignment_id)?.title||'',Marks:x.marks_obtained||'',Status:x.status})),'Submissions.xlsx')}},{label:'💳 Payments',fn:async()=>{const[p,s]=await Promise.all([sb.from('fee_payments').select('*'),sb.from('students').select('*')]);exportXLS((p.data||[]).map(x=>({Student:s.data?.find(st=>st.id===x.student_id)?.full_name||'',Month:x.month,Year:x.year,Amount:x.amount,Paid:x.paid_amount,Method:x.payment_method||'',Receipt:x.receipt_number||'',Status:x.status})),'Payments.xlsx')}}];return(<Grid gap={24}><Card title="📥 Import" icon="📥"><div style={{marginBottom:18}}><Btn type="ghost" size="sm" icon="📋" onClick={()=>exportXLS([{'Full Name':'Ahmed',Email:'a@b.com',Phone:'030',City:'LHR','Father/Guardian':'Ali',Gender:'male','Referred By':'Friend/Family','Fee Amount':5000}],'Template.xlsx')}>Template</Btn></div><FileUp label="Upload .xlsx" accept=".xlsx,.xls,.csv" onUpload={handleImport}/>{preview&&<div style={{...getGlassLight(dark),borderRadius:14,padding:20,marginTop:18}}><div style={{fontSize:14,fontWeight:700,marginBottom:14}}>Preview ({preview.data.length})</div><div style={{maxHeight:200,overflowY:'auto',fontSize:12}} className="cs">{preview.data.slice(0,5).map((r,i)=><div key={i} style={{padding:'9px 0',borderBottom:'1px solid rgba(255,255,255,.04)',color:'#9CA3AF'}}>{Object.values(r).slice(0,4).join(' · ')}</div>)}</div><div style={{display:'flex',gap:10,marginTop:18}}><Btn onClick={confirmImport} loading={importing}>✅ Import</Btn><Btn type="ghost" onClick={()=>setPreview(null)}>Cancel</Btn></div></div>}</Card><Card title="📊 Export" icon="📊"><div style={{display:'flex',flexDirection:'column',gap:12}}>{exports.map(({label,fn})=>(<div key={label} className="ch" style={{...getGlassLight(dark),borderRadius:14,padding:18,display:'flex',alignItems:'center',gap:14,cursor:'pointer'}} onClick={fn}><div style={{width:46,height:46,background:'rgba(255,215,0,.06)',borderRadius:12,display:'flex',alignItems:'center',justifyContent:'center',fontSize:22}}>📊</div><div style={{flex:1,fontSize:14,fontWeight:700,color:dark?'#E5E7EB':'#1F2937'}}>{label}</div><span style={{color:'#FFD700',fontSize:20}}>↓</span></div>))}</div></Card></Grid>)}
+function ExcelPage(){const[importing,setImporting]=useState(false);const[preview,setPreview]=useState(null);const{dark}=useTheme();const handleImport=async e=>{const file=e.target.files[0];if(!file)return;const data=await new Promise((res,rej)=>{const r=new FileReader();r.onload=ev=>{try{res(XLSX.utils.sheet_to_json(XLSX.read(ev.target.result,{type:'array'}).Sheets[XLSX.read(ev.target.result,{type:'array'}).SheetNames[0]]))}catch(err){rej(err)}};r.readAsArrayBuffer(file)});setPreview({data});e.target.value=''};const confirmImport=async()=>{if(!preview)return;setImporting(true);try{const records=preview.data.map(r=>({full_name:r['Full Name']||r.full_name||r.Name||'',email:r['Personal Email']||r.Email||r.email||'',login_email:r['Login Email']||r.login_email||r['Portal Email']||r.Email||r.email||'',phone:r.Phone||r.phone||'',city:r.City||r.city||'',education:r.Education||r.education||'',father_name:r['Father/Guardian']||r.father_name||'',gender:r.Gender||r.gender||'male',referred_by:r['Referred By']||r.referred_by||'',status:'active',fee_status:'pending',password:'12345678',fee_amount:parseFloat(r['Fee Amount']||0)})).filter(r=>r.full_name&&r.email);await sb.from('students').insert(records);toast.success(records.length+' imported!');setPreview(null)}finally{setImporting(false)}};const exports=[{label:'👥 Students',fn:async()=>{const{data}=await sb.from('students').select('*');exportXLS(data.map(s=>({Name:s.full_name,'Personal Email':s.email,'Login Email':s.login_email||s.email,Phone:s.phone||'',City:s.city||'',Father:s.father_name||'',Gender:s.gender||'',Referred:s.referred_by||'',Fee:s.fee_amount||0,Paid:s.fee_paid||0})),'Students.xlsx')}},{label:'💰 Fees',fn:async()=>{const{data}=await sb.from('students').select('*');exportXLS(data.map(s=>({Student:s.full_name,Monthly:s.fee_amount||0,Paid:s.fee_paid||0,Due:(s.fee_amount||0)*3-(s.fee_paid||0),Status:s.fee_status||''})),'Fees.xlsx')}},{label:'✅ Attendance',fn:async()=>{const[a,s,c]=await Promise.all([sb.from('attendance').select('*'),sb.from('students').select('*'),sb.from('classes').select('*')]);exportXLS((a.data||[]).map(x=>({Student:s.data?.find(st=>st.id===x.student_id)?.full_name||'',Class:'C'+(c.data?.find(cl=>cl.id===x.class_id)?.class_number||''),Status:x.status})),'Attendance.xlsx')}},{label:'📤 Submissions',fn:async()=>{const[s,st,a]=await Promise.all([sb.from('submissions').select('*'),sb.from('students').select('*'),sb.from('assignments').select('*')]);exportXLS((s.data||[]).map(x=>({Student:st.data?.find(s=>s.id===x.student_id)?.full_name||'',Assignment:a.data?.find(a=>a.id===x.assignment_id)?.title||'',Marks:x.marks_obtained||'',Status:x.status})),'Submissions.xlsx')}},{label:'💳 Payments',fn:async()=>{const[p,s]=await Promise.all([sb.from('fee_payments').select('*'),sb.from('students').select('*')]);exportXLS((p.data||[]).map(x=>({Student:s.data?.find(st=>st.id===x.student_id)?.full_name||'',Month:x.month,Year:x.year,Amount:x.amount,Paid:x.paid_amount,Method:x.payment_method||'',Receipt:x.receipt_number||'',Status:x.status})),'Payments.xlsx')}}];return(<Grid gap={24}><Card title="📥 Import" icon="📥"><div style={{marginBottom:18}}><Btn type="ghost" size="sm" icon="📋" onClick={()=>exportXLS([{'Full Name':'Ahmed','Personal Email':'ahmed@gmail.com','Login Email':'ahmed@portal.com',Phone:'03001234567',City:'LHR','Father/Guardian':'Ali',Gender:'male','Referred By':'Friend/Family','Fee Amount':5000}],'Template.xlsx')}>Template</Btn></div><FileUp label="Upload .xlsx" accept=".xlsx,.xls,.csv" onUpload={handleImport}/>{preview&&<div style={{...getGlassLight(dark),borderRadius:14,padding:20,marginTop:18}}><div style={{fontSize:14,fontWeight:700,marginBottom:14}}>Preview ({preview.data.length})</div><div style={{maxHeight:200,overflowY:'auto',fontSize:12}} className="cs">{preview.data.slice(0,5).map((r,i)=><div key={i} style={{padding:'9px 0',borderBottom:'1px solid rgba(255,255,255,.04)',color:'#9CA3AF'}}>{Object.values(r).slice(0,4).join(' · ')}</div>)}</div><div style={{display:'flex',gap:10,marginTop:18}}><Btn onClick={confirmImport} loading={importing}>✅ Import</Btn><Btn type="ghost" onClick={()=>setPreview(null)}>Cancel</Btn></div></div>}</Card><Card title="📊 Export" icon="📊"><div style={{display:'flex',flexDirection:'column',gap:12}}>{exports.map(({label,fn})=>(<div key={label} className="ch" style={{...getGlassLight(dark),borderRadius:14,padding:18,display:'flex',alignItems:'center',gap:14,cursor:'pointer'}} onClick={fn}><div style={{width:46,height:46,background:'rgba(255,215,0,.06)',borderRadius:12,display:'flex',alignItems:'center',justifyContent:'center',fontSize:22}}>📊</div><div style={{flex:1,fontSize:14,fontWeight:700,color:dark?'#E5E7EB':'#1F2937'}}>{label}</div><span style={{color:'#FFD700',fontSize:20}}>↓</span></div>))}</div></Card></Grid>)}
 
 function SettingsPage(){
   const{user}=useAuth();const{dark}=useTheme()
