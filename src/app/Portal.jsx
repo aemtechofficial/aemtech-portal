@@ -21,9 +21,35 @@ const PageCtx = createContext({ page: 'dashboard', setPage: () => {} })
 const usePage = () => useContext(PageCtx)
 
 function AuthProvider({ children }) {
-  const [session, setSession] = useState(null)
+  const [session, setSession] = useState(() => {
+    if (typeof window === 'undefined') return null
+    try { const s = localStorage.getItem('aemtech_session'); return s ? JSON.parse(s) : null } catch { return null }
+  })
   const [loading, setLoading] = useState(false)
+  
+  // Save session to localStorage
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (session) localStorage.setItem('aemtech_session', JSON.stringify(session))
+    else localStorage.removeItem('aemtech_session')
+  }, [session])
+  
+  // Auto session timeout (30 min idle)
   useEffect(() => { if (!session) return; let t; const r = () => { clearTimeout(t); t = setTimeout(() => { setSession(null); toast.error('Session expired') }, 30*60*1000) }; const ev = ['mousedown','mousemove','keydown','scroll','touchstart']; ev.forEach(e => window.addEventListener(e, r)); r(); return () => { clearTimeout(t); ev.forEach(e => window.removeEventListener(e, r)) } }, [session])
+  
+  // Update last_seen every 2 minutes
+  useEffect(() => {
+    if (!session) return
+    const update = async () => {
+      const now = new Date().toISOString()
+      if (session.role === 'admin') await sb.from('users').update({ last_seen: now }).eq('id', session.user.id)
+      else await sb.from('students').update({ last_seen: now }).eq('id', session.user.id)
+    }
+    update()
+    const i = setInterval(update, 120000)
+    return () => clearInterval(i)
+  }, [session])
+  
   const login = async (email, password, role) => {
     if (!email || !password) { toast.error('Fill all fields'); return false }
     setLoading(true)
@@ -32,9 +58,8 @@ function AuthProvider({ children }) {
         const { data } = await sb.from('users').select('*').eq('email', email).eq('role', 'admin').single()
         if (!data) { toast.error('Admin not found'); return false }
         if (data.password_hash !== password) { toast.error('Wrong password'); return false }
-        setSession({ user: data, role: 'admin' }); toast.success(`Welcome, ${data.full_name}! 👋`); return true
+        const sess = { user: data, role: 'admin' }; setSession(sess); toast.success(`Welcome, ${data.full_name}! 👋`); return true
       } else {
-        // Try login_email first, then fallback to personal email
         let { data } = await sb.from('students').select('*').eq('login_email', email).single()
         if (!data) {
           const res = await sb.from('students').select('*').eq('email', email).single()
@@ -42,11 +67,11 @@ function AuthProvider({ children }) {
         }
         if (!data) { toast.error('Student not found'); return false }
         if (data.password !== password) { toast.error('Wrong password'); return false }
-        setSession({ user: data, role: 'student' }); toast.success(`Welcome, ${data.full_name}! 👋`); return true
+        const sess = { user: data, role: 'student' }; setSession(sess); toast.success(`Welcome, ${data.full_name}! 👋`); return true
       }
     } catch { toast.error('Login failed'); return false } finally { setLoading(false) }
   }
-  const logout = () => { setSession(null); toast.success('Logged out') }
+  const logout = () => { setSession(null); if(typeof window!=='undefined') localStorage.removeItem('aemtech_session'); toast.success('Logged out') }
   return <AuthCtx.Provider value={{ session, user: session?.user||null, role: session?.role||null, isLoggedIn: !!session, isAdmin: session?.role==='admin', isStudent: session?.role==='student', loading, login, logout }}>{children}</AuthCtx.Provider>
 }
 
@@ -673,7 +698,7 @@ function LoginPage() {
 // ═══════════════════════════════════════
 function AdminDashboard() {
   const { user } = useAuth(); const { dark } = useTheme(); const { setPage } = usePage()
-  const [stats, setStats] = useState({}); const [recent, setRecent] = useState([]); const [anns, setAnns] = useState([]); const [subs, setSubs] = useState([]); const [loading, setLoading] = useState(true); const [syncing, setSyncing] = useState(false); const [overdueFees, setOverdueFees] = useState(0); const [attData, setAttData] = useState([]); const [growthData, setGrowthData] = useState([])
+  const [stats, setStats] = useState({}); const [recent, setRecent] = useState([]); const [anns, setAnns] = useState([]); const [subs, setSubs] = useState([]); const [loading, setLoading] = useState(true); const [syncing, setSyncing] = useState(false); const [overdueFees, setOverdueFees] = useState(0); const [attData, setAttData] = useState([]); const [growthData, setGrowthData] = useState([]); const [onlineStudents, setOnlineStudents] = useState([])
 
   useEffect(() => {
     (async () => {
@@ -730,6 +755,16 @@ function AdminDashboard() {
       
       setLoading(false)
     })()
+    
+    // Fetch online students (last_seen within 5 min)
+    const fetchOnline = async () => {
+      const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
+      const { data } = await sb.from('students').select('id,full_name,profile_image,last_seen').gte('last_seen', fiveMinAgo)
+      setOnlineStudents(data || [])
+    }
+    fetchOnline()
+    const onlineInterval = setInterval(fetchOnline, 30000)
+    return () => clearInterval(onlineInterval)
   }, [])
 
   const syncAll = async () => {
@@ -787,6 +822,26 @@ function AdminDashboard() {
         <Stat icon="📤" value={stats.submissions} label="Submissions" delay={.18} />
         <Stat icon="⚠️" value={overdueFees} label="Overdue Fees" delay={.24} color="#EF4444" />
       </div>
+
+      {/* Online Students */}
+      {onlineStudents.length > 0 && (
+        <Card title={`🟢 Online Now (${onlineStudents.length})`} icon="🟢" delay={.28}>
+          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+            {onlineStudents.map(s => (
+              <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, ...getGlassLight(dark), borderRadius: 30, padding: '8px 16px 8px 8px' }}>
+                <div style={{ position: 'relative' }}>
+                  <Av name={s.full_name} src={s.profile_image||null} size={32} />
+                  <div className="od" style={{ position: 'absolute', bottom: -1, right: -1, width: 10, height: 10, borderRadius: '50%', background: '#10B981', border: '2px solid #000' }} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: dark ? '#E5E7EB' : '#1F2937' }}>{s.full_name}</div>
+                  <div style={{ fontSize: 10, color: '#10B981' }}>Online</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* Charts */}
       <Grid gap={26} style={{ marginBottom: 30 }}>
