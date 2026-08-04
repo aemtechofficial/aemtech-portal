@@ -541,7 +541,7 @@ function Sidebar({ page, setPage, mobileOpen, setMobileOpen }) {
     { sec: 'Tools', items: [{ id: 'announcements', icon: '📢', label: 'Announcements' }, { id: 'progress', icon: '📄', label: 'Progress Report' }, { id: 'certificates', icon: '🎓', label: 'Certificates' }, { id: 'leaderboard', icon: '🏆', label: 'Leaderboard' }, { id: 'sync', icon: '🔄', label: 'Sheet Sync' }, { id: 'excel', icon: '📈', label: 'Import/Export' }, { id: 'settings', icon: '⚙️', label: 'Settings' }] },
   ]
   const studentNav = [
-    { sec: 'My Portal', items: [{ id: 'dashboard', icon: '📊', label: 'Dashboard' }, { id: 'attendance', icon: '✅', label: 'My Attendance' }, { id: 'assignments', icon: '📝', label: 'Assignments' }, { id: 'quizzes', icon: '🧠', label: 'Quizzes' }, { id: 'recordings', icon: '🎥', label: 'Recordings' }, { id: 'timetable', icon: '🗓', label: 'Timetable' }, { id: 'announcements', icon: '📢', label: 'Announcements' }, { id: 'fees', icon: '💰', label: 'My Fees' }, { id: 'certificate', icon: '🎓', label: 'Certificate' }, { id: 'profile', icon: '👤', label: 'My Profile' }] },
+    { sec: 'My Portal', items: [{ id: 'dashboard', icon: '📊', label: 'Dashboard' }, { id: 'attendance', icon: '✅', label: 'My Attendance' }, { id: 'assignments', icon: '📝', label: 'Assignments' }, { id: 'quizzes', icon: '🧠', label: 'Quizzes' }, { id: 'recordings', icon: '🎥', label: 'Recordings' }, { id: 'timetable', icon: '🗓', label: 'Timetable' }, { id: 'announcements', icon: '📢', label: 'Announcements' }, { id: 'fees', icon: '💰', label: 'My Fees' }, { id: 'profile', icon: '👤', label: 'My Profile' }] },
   ]
   const nav = role === 'admin' ? adminNav : studentNav
   const handleNav = id => { setPage(id); setMobileOpen(false) }
