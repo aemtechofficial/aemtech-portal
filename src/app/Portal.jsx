@@ -389,7 +389,7 @@ function Sidebar({ page, setPage, mobileOpen, setMobileOpen }) {
     { sec: 'People', items: [{ id: 'students', icon: '👥', label: 'Students' }, { id: 'admissions', icon: '📋', label: 'Admissions' }, { id: 'batches', icon: '🏫', label: 'Batches' }] },
     { sec: 'Academic', items: [{ id: 'classes', icon: '📅', label: 'Classes' }, { id: 'attendance', icon: '✅', label: 'Attendance' }, { id: 'assignments', icon: '📝', label: 'Assignments' }, { id: 'submissions', icon: '📤', label: 'Submissions' }, { id: 'recordings', icon: '🎥', label: 'Recordings' }] },
     { sec: 'Finance', items: [{ id: 'fees', icon: '💰', label: 'Fee Management' }] },
-    { sec: 'Tools', items: [{ id: 'announcements', icon: '📢', label: 'Announcements' }, { id: 'certificates', icon: '🎓', label: 'Certificates' }, { id: 'sync', icon: '🔄', label: 'Sheet Sync' }, { id: 'excel', icon: '📈', label: 'Import/Export' }, { id: 'settings', icon: '⚙️', label: 'Settings' }] },
+    { sec: 'Tools', items: [{ id: 'announcements', icon: '📢', label: 'Announcements' }, { id: 'certificates', icon: '🎓', label: 'Certificates' }, { id: 'leaderboard', icon: '🏆', label: 'Leaderboard' }, { id: 'sync', icon: '🔄', label: 'Sheet Sync' }, { id: 'excel', icon: '📈', label: 'Import/Export' }, { id: 'settings', icon: '⚙️', label: 'Settings' }] },
   ]
   const studentNav = [
     { sec: 'My Portal', items: [{ id: 'dashboard', icon: '📊', label: 'Dashboard' }, { id: 'attendance', icon: '✅', label: 'My Attendance' }, { id: 'assignments', icon: '📝', label: 'Assignments' }, { id: 'recordings', icon: '🎥', label: 'Recordings' }, { id: 'announcements', icon: '📢', label: 'Announcements' }, { id: 'fees', icon: '💰', label: 'My Fees' }, { id: 'certificate', icon: '🎓', label: 'Certificate' }, { id: 'profile', icon: '👤', label: 'My Profile' }] },
@@ -2646,7 +2646,105 @@ function StudentProfilePage() {
 // ═══════════════════════════════════════
 // MAIN APP — v3.2 FINAL
 // ═══════════════════════════════════════
-const pageTitles = { dashboard: '📊 Dashboard', students: '👥 Students', admissions: '📋 Admissions', batches: '🏫 Batches', classes: '📅 Classes', attendance: '✅ Attendance', assignments: '📝 Assignments', submissions: '📤 Submissions', recordings: '🎥 Recordings', fees: '💰 Fee Management', announcements: '📢 Announcements', certificates: '🎓 Certificates', sync: '🔄 Sheet Sync', excel: '📈 Import/Export', settings: '⚙️ Settings', certificate: '🎓 My Certificate', profile: '👤 My Profile' }
+// ═══════════════════════════════════════
+// STUDENT LEADERBOARD
+// ═══════════════════════════════════════
+function LeaderboardPage() {
+  const { dark } = useTheme()
+  const [students, setStudents] = useState([])
+  const [submissions, setSubmissions] = useState([])
+  const [attendance, setAttendance] = useState([])
+  const [classes, setClasses] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [tab, setTab] = useState('overall')
+
+  useEffect(() => {
+    (async () => {
+      const [s, sub, att, cls] = await Promise.all([
+        sb.from('students').select('*').eq('status', 'active'),
+        sb.from('submissions').select('*'),
+        sb.from('attendance').select('*'),
+        sb.from('classes').select('*')
+      ])
+      setStudents(s.data || [])
+      setSubmissions(sub.data || [])
+      setAttendance(att.data || [])
+      setClasses(cls.data || [])
+      setLoading(false)
+    })()
+  }, [])
+
+  if (loading) return <Loader />
+
+  const ranked = students.map(s => {
+    const myAtt = attendance.filter(a => a.student_id === s.id)
+    const present = myAtt.filter(a => a.status === 'present').length
+    const totalClasses = classes.filter(c => c.batch_id === s.batch_id).length
+    const attPct = totalClasses > 0 ? Math.round((present / totalClasses) * 100) : 0
+
+    const mySubs = submissions.filter(x => x.student_id === s.id)
+    const graded = mySubs.filter(x => x.marks_obtained != null)
+    const avgMarks = graded.length > 0 ? Math.round(graded.reduce((a, x) => a + (x.marks_obtained || 0), 0) / graded.length) : 0
+    const subCount = mySubs.length
+
+    const score = Math.round(attPct * 0.4 + avgMarks * 0.4 + Math.min(subCount * 5, 100) * 0.2)
+
+    return { ...s, attPct, avgMarks, subCount, present, totalClasses, score }
+  })
+
+  const sorted = tab === 'attendance' ? [...ranked].sort((a, b) => b.attPct - a.attPct)
+    : tab === 'marks' ? [...ranked].sort((a, b) => b.avgMarks - a.avgMarks)
+    : [...ranked].sort((a, b) => b.score - a.score)
+
+  const medals = ['🥇', '🥈', '🥉']
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 24, padding: 6, ...getGlass(dark), borderRadius: 16, overflowX: 'auto' }} className="cs">
+        {[['overall', '🏆 Overall'], ['attendance', '✅ Attendance'], ['marks', '📝 Marks']].map(([k, l]) => (
+          <button key={k} onClick={() => setTab(k)} style={{ padding: '12px 24px', borderRadius: 12, border: 'none', cursor: 'pointer', fontFamily: "'Inter',sans-serif", fontWeight: 700, fontSize: 13, transition: 'all .3s', background: tab === k ? G : 'transparent', color: tab === k ? '#000' : '#6B7280', whiteSpace: 'nowrap' }}>{l}</button>
+        ))}
+      </div>
+
+      {/* Top 3 */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, marginBottom: 26 }} className="mf">
+        {sorted.slice(0, 3).map((s, i) => (
+          <div key={s.id} className="ch" style={{ ...getGlass(dark), borderRadius: 22, padding: 28, textAlign: 'center', borderTop: `3px solid ${i === 0 ? '#FFD700' : i === 1 ? '#C0C0C0' : '#CD7F32'}` }}>
+            <div style={{ fontSize: 44, marginBottom: 12 }}>{medals[i]}</div>
+            <Av name={s.full_name} src={s.profile_image || null} size={64} glow />
+            <div style={{ fontSize: 18, fontWeight: 800, color: dark ? '#E5E7EB' : '#1F2937', marginTop: 14 }}>{s.full_name}</div>
+            <div style={{ fontSize: 32, fontWeight: 900, color: '#FFD700', fontFamily: "'Space Grotesk',sans-serif", marginTop: 8 }}>
+              {tab === 'attendance' ? s.attPct + '%' : tab === 'marks' ? s.avgMarks + 'pts' : s.score + 'pts'}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 14, marginTop: 14 }}>
+              <div><div style={{ fontSize: 10, color: '#6B7280' }}>Attendance</div><div style={{ fontWeight: 700, color: '#10B981', fontSize: 14 }}>{s.attPct}%</div></div>
+              <div><div style={{ fontSize: 10, color: '#6B7280' }}>Avg Marks</div><div style={{ fontWeight: 700, color: '#3B82F6', fontSize: 14 }}>{s.avgMarks}</div></div>
+              <div><div style={{ fontSize: 10, color: '#6B7280' }}>Submitted</div><div style={{ fontWeight: 700, color: '#F59E0B', fontSize: 14 }}>{s.subCount}</div></div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Full List */}
+      <Card title={`🏆 Full Rankings (${sorted.length})`} icon="🏆" noPadding>
+        <Tbl headers={['Rank', 'Student', 'Attendance', 'Avg Marks', 'Submissions', 'Score']}>
+          {sorted.map((s, i) => (
+            <TR key={s.id} delay={i * .02}>
+              <TD><div style={{ fontWeight: 900, fontSize: 16, color: i < 3 ? '#FFD700' : dark ? '#4B5563' : '#9CA3AF', fontFamily: "'Space Grotesk',sans-serif" }}>{i < 3 ? medals[i] : '#' + (i + 1)}</div></TD>
+              <TD><div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><Av name={s.full_name} src={s.profile_image || null} size={32} /><span style={{ fontWeight: 600, color: dark ? '#E5E7EB' : '#1F2937' }}>{s.full_name}</span></div></TD>
+              <TD><span style={{ color: attColor(s.attPct), fontWeight: 700 }}>{s.attPct}%</span></TD>
+              <TD><span style={{ fontWeight: 700, color: '#3B82F6' }}>{s.avgMarks}</span></TD>
+              <TD><span style={{ fontWeight: 600 }}>{s.subCount}</span></TD>
+              <TD><div style={{ fontWeight: 800, fontSize: 16, color: '#FFD700', fontFamily: "'Space Grotesk',sans-serif" }}>{s.score}</div></TD>
+            </TR>
+          ))}
+        </Tbl>
+      </Card>
+    </div>
+  )
+}
+
+const pageTitles = { dashboard: '📊 Dashboard', students: '👥 Students', admissions: '📋 Admissions', batches: '🏫 Batches', classes: '📅 Classes', attendance: '✅ Attendance', assignments: '📝 Assignments', submissions: '📤 Submissions', recordings: '🎥 Recordings', fees: '💰 Fee Management', announcements: '📢 Announcements', certificates: '🎓 Certificates', leaderboard: '🏆 Leaderboard', sync: '🔄 Sheet Sync', excel: '📈 Import/Export', settings: '⚙️ Settings', certificate: '🎓 My Certificate', profile: '👤 My Profile' }
 
 function Portal() {
   const { isLoggedIn, isAdmin, isStudent, user } = useAuth()
@@ -2656,6 +2754,30 @@ function Portal() {
   const [pendingCount, setPendingCount] = useState(0)
 
   useEffect(() => { if (!isAdmin) return; const load = async () => { const { count } = await sb.from('admissions').select('*', { count: 'exact', head: true }).eq('status', 'pending'); setPendingCount(count || 0) }; load(); const i = setInterval(load, 60000); return () => clearInterval(i) }, [isAdmin])
+
+  // Keyboard Shortcuts
+  useEffect(() => {
+    if (!isLoggedIn) return
+    const handle = (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === 'k' || e.key === 'K') { e.preventDefault(); setPage('students') }
+        if (e.key === 'd' || e.key === 'D') { e.preventDefault(); setPage('dashboard') }
+      }
+      if (e.altKey) {
+        if (e.key === '1') { e.preventDefault(); setPage('dashboard') }
+        if (e.key === '2') { e.preventDefault(); setPage('students') }
+        if (e.key === '3') { e.preventDefault(); setPage('fees') }
+        if (e.key === '4') { e.preventDefault(); setPage('attendance') }
+        if (e.key === '5') { e.preventDefault(); setPage('assignments') }
+        if (e.key === '6') { e.preventDefault(); setPage('admissions') }
+        if (e.key === '7') { e.preventDefault(); setPage('announcements') }
+        if (e.key === '8') { e.preventDefault(); setPage('settings') }
+      }
+    }
+    window.addEventListener('keydown', handle)
+    return () => window.removeEventListener('keydown', handle)
+  }, [isLoggedIn, setPage])
 
   useEffect(() => {
     if (!isLoggedIn) return
@@ -2668,7 +2790,7 @@ function Portal() {
     return () => { sb.removeChannel(channel) }
   }, [isLoggedIn])
 
-  const adminPages = { dashboard: <AdminDashboard />, students: <StudentsPage />, admissions: <AdmissionsPage />, batches: <BatchesPage />, classes: <ClassesPage />, attendance: <AttendancePage />, assignments: <AssignmentsPage />, submissions: <SubmissionsPage />, recordings: <RecordingsPage />, fees: <FeesPage />, announcements: <AnnouncementsPage />, certificates: <CertificatesPage />, sync: <SheetSyncPage />, excel: <ExcelPage />, settings: <SettingsPage /> }
+  const adminPages = { dashboard: <AdminDashboard />, students: <StudentsPage />, admissions: <AdmissionsPage />, batches: <BatchesPage />, classes: <ClassesPage />, attendance: <AttendancePage />, assignments: <AssignmentsPage />, submissions: <SubmissionsPage />, recordings: <RecordingsPage />, fees: <FeesPage />, announcements: <AnnouncementsPage />, certificates: <CertificatesPage />, leaderboard: <LeaderboardPage />, sync: <SheetSyncPage />, excel: <ExcelPage />, settings: <SettingsPage /> }
   const studentPages = { dashboard: <StudentDashboard />, attendance: <StudentAttendancePage />, assignments: <StudentAssignmentsPage />, recordings: <StudentRecordingsPage />, announcements: <StudentAnnouncementsPage />, fees: <StudentFeesPage />, certificate: <StudentCertificatePage />, profile: <StudentProfilePage /> }
 
   if (!isLoggedIn) return <LoginPage />
