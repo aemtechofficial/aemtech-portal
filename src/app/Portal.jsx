@@ -1,11 +1,11 @@
 "use client"
 
-import { useState, useEffect, useCallback, createContext, useContext } from 'react'
+import React, { useState, useEffect, useCallback, createContext, useContext, useRef } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import { Toaster, toast } from 'react-hot-toast'
 import * as XLSX from 'xlsx'
 import { saveAs } from 'file-saver'
-import { AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
+import { AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from 'recharts'
 
 const sb = createClient('https://ckouxkqwkhaubamepsnb.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNrb3V4a3F3a2hhdWJhbWVwc25iIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ2MjY2MzAsImV4cCI6MjEwMDIwMjYzMH0.3OQSyb0TX4wsuDsRK-C1-8ycJKUnBcD0fmTEy4pK7wQ')
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyqW_CsghyazeOHVvwKsr1uYsj2Dsy-b02YjUr86HGu5B042cxCl5-a4KBV5sDCMBV0/exec'
@@ -96,6 +96,155 @@ const currentMonth = () => MONTHS[new Date().getMonth()]
 const currentYear = () => new Date().getFullYear()
 const PAYMENT_METHODS = ['Cash','Bank Transfer','JazzCash','EasyPaisa','Other']
 const REFERRAL_SOURCES = ['Social Media','Friend/Family','Website','WhatsApp','Google','YouTube','Walk-in','Other']
+const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']
+const DAY_SHORT = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
+const HOURS = Array.from({length:15},(_,i)=>{ const h=8+i; return `${h>12?h-12:h}:00 ${h>=12?'PM':'AM'}` })
+
+// ═══════════════════════════════════════
+// CONFIRM DIALOG — Beautiful Modal Confirmation
+// ═══════════════════════════════════════
+const ConfirmCtx = createContext({ confirm: async () => false })
+const useConfirm = () => useContext(ConfirmCtx)
+
+function ConfirmProvider({ children }) {
+  const [state, setState] = useState(null)
+  const resolveRef = useRef(null)
+
+  const confirm = ({ title = 'Confirm', message = 'Are you sure?', type = 'danger', confirmText = 'Confirm', cancelText = 'Cancel', icon = '⚠️' } = {}) => {
+    return new Promise(resolve => {
+      resolveRef.current = resolve
+      setState({ title, message, type, confirmText, cancelText, icon })
+    })
+  }
+
+  const handle = (result) => {
+    if (resolveRef.current) resolveRef.current(result)
+    setState(null)
+  }
+
+  return (
+    <ConfirmCtx.Provider value={{ confirm }}>
+      {children}
+      {state && (
+        <div style={{ position:'fixed', inset:0, zIndex:10000, display:'flex', alignItems:'center', justifyContent:'center', animation:'fadeIn .2s ease' }}>
+          <div onClick={()=>handle(false)} style={{ position:'absolute', inset:0, background:'rgba(0,0,0,.7)', backdropFilter:'blur(8px)' }}/>
+          <div style={{ position:'relative', background:'rgba(12,12,14,.95)', border:'1px solid rgba(255,215,0,.08)', borderRadius:24, padding:'36px 32px 28px', maxWidth:420, width:'90%', animation:'scaleIn .25s ease', boxShadow:'0 24px 60px rgba(0,0,0,.5)' }}>
+            <div style={{ textAlign:'center', marginBottom:24 }}>
+              <div style={{ fontSize:52, marginBottom:16, animation:'popIn .3s ease .1s both' }}>{state.icon}</div>
+              <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:20, fontWeight:800, color:'#E5E7EB', marginBottom:10 }}>{state.title}</div>
+              <div style={{ fontSize:14, color:'#9CA3AF', lineHeight:1.7 }}>{state.message}</div>
+            </div>
+            <div style={{ display:'flex', gap:12 }}>
+              <button onClick={()=>handle(false)} style={{ flex:1, padding:'14px 24px', borderRadius:14, border:'1px solid rgba(255,255,255,.08)', background:'rgba(255,255,255,.03)', color:'#9CA3AF', fontWeight:700, fontSize:14, cursor:'pointer', fontFamily:"'Inter',sans-serif", transition:'all .2s' }}>{state.cancelText}</button>
+              <button onClick={()=>handle(true)} style={{ flex:1, padding:'14px 24px', borderRadius:14, border:'none', background: state.type==='danger'?'linear-gradient(135deg,#EF4444,#DC2626)':state.type==='warning'?'linear-gradient(135deg,#F59E0B,#D97706)':'linear-gradient(135deg,#FFD700,#FFA500)', color: state.type==='danger'||state.type==='warning'?'#fff':'#000', fontWeight:800, fontSize:14, cursor:'pointer', fontFamily:"'Inter',sans-serif", boxShadow: state.type==='danger'?'0 4px 20px rgba(239,68,68,.3)':'0 4px 20px rgba(255,215,0,.3)', transition:'all .2s' }}>{state.confirmText}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </ConfirmCtx.Provider>
+  )
+}
+
+// ═══════════════════════════════════════
+// ENHANCED TOAST — with undo + progress bar
+// ═══════════════════════════════════════
+const toastSuccess = (msg, opts = {}) => {
+  const { undo, duration = 3500 } = opts
+  if (undo) {
+    let cancelled = false
+    const id = toast.custom((t) => {
+      const [prog, setProg] = useState(100)
+      useEffect(() => {
+        const start = Date.now()
+        const interval = setInterval(() => {
+          const elapsed = Date.now() - start
+          const pct = Math.max(0, 100 - (elapsed / duration) * 100)
+          setProg(pct)
+          if (pct <= 0) { clearInterval(interval); if (!cancelled) toast.dismiss(t.id) }
+        }, 50)
+        return () => clearInterval(interval)
+      }, [t.id])
+      return (
+        <div style={{ background:'rgba(12,12,14,.95)', border:'1px solid rgba(16,185,129,.15)', borderRadius:16, padding:'14px 18px', boxShadow:'0 10px 36px rgba(0,0,0,.3)', maxWidth:360, animation: t.visible ? 'slideInRight .3s ease' : 'fadeIn .2s ease reverse', display:'flex', alignItems:'center', gap:12, position:'relative', overflow:'hidden' }}>
+          <span style={{ fontSize:20 }}>✅</span>
+          <span style={{ flex:1, fontSize:13, fontWeight:600, color:'#E5E7EB' }}>{msg}</span>
+          <button onClick={()=>{ cancelled=true; undo(); toast.dismiss(t.id); toast.success('Undone! ↩️',{duration:1500}) }} style={{ background:'rgba(255,215,0,.1)', border:'1px solid rgba(255,215,0,.2)', color:'#FFD700', padding:'6px 14px', borderRadius:8, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:"'Inter',sans-serif", whiteSpace:'nowrap' }}>↩️ Undo</button>
+          <div style={{ position:'absolute', bottom:0, left:0, height:3, background:'linear-gradient(90deg,#10B981,#059669)', width:prog+'%', transition:'width .05s linear', borderRadius:3 }}/>
+        </div>
+      )
+    }, { duration: duration + 200 })
+    return id
+  }
+  return toast.success(msg, opts)
+}
+
+// ═══════════════════════════════════════
+// LOADING SKELETONS
+// ═══════════════════════════════════════
+const Skeleton = ({ width='100%', height=20, radius=10, style:cs={} }) => (
+  <div className="skeleton" style={{ width, height, borderRadius:radius, ...cs }}/>
+)
+
+const SkeletonCard = ({ count=3 }) => (
+  <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))', gap:18 }}>
+    {Array.from({length:count}).map((_,i)=>(
+      <div key={i} style={{ background:'rgba(12,12,14,.6)', borderRadius:22, padding:30, border:'1px solid rgba(255,215,0,.04)' }}>
+        <Skeleton width={50} height={50} radius={14} style={{marginBottom:16}}/>
+        <Skeleton width="60%" height={28} style={{marginBottom:12}}/>
+        <Skeleton width="40%" height={14}/>
+      </div>
+    ))}
+  </div>
+)
+
+const SkeletonTable = ({ rows=5, cols=5 }) => (
+  <div style={{ background:'rgba(12,12,14,.6)', borderRadius:18, padding:20, border:'1px solid rgba(255,215,0,.04)' }}>
+    <div style={{ display:'flex', gap:12, marginBottom:20 }}>
+      {Array.from({length:cols}).map((_,i)=><Skeleton key={i} height={16} style={{flex:1}}/>)}
+    </div>
+    {Array.from({length:rows}).map((_,i)=>(
+      <div key={i} style={{ display:'flex', gap:12, marginBottom:14 }}>
+        {Array.from({length:cols}).map((_,j)=><Skeleton key={j} height={14} style={{flex:1}} radius={6}/>)}
+      </div>
+    ))}
+  </div>
+)
+
+const SkeletonDashboard = () => (
+  <div style={{animation:'fadeIn .3s ease'}}>
+    <Skeleton width="100%" height={130} radius={22} style={{marginBottom:24}}/>
+    <SkeletonCard count={5}/>
+    <div style={{marginTop:24}}><Skeleton width="100%" height={300} radius={18}/></div>
+  </div>
+)
+
+// ═══════════════════════════════════════
+// NOTIFICATIONS SYSTEM
+// ═══════════════════════════════════════
+const NotifCtx = createContext({ notifications: [], unreadCount: 0, markRead: () => {}, markAllRead: () => {}, addNotification: () => {} })
+const useNotifications = () => useContext(NotifCtx)
+
+function NotificationProvider({ children }) {
+  const [notifications, setNotifications] = useState(() => {
+    if (typeof window === 'undefined') return []
+    try { return JSON.parse(localStorage.getItem('aemtech_notifs') || '[]') } catch { return [] }
+  })
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') localStorage.setItem('aemtech_notifs', JSON.stringify(notifications.slice(0, 50)))
+  }, [notifications])
+
+  const addNotification = (notif) => {
+    const n = { id: Date.now() + Math.random(), time: new Date().toISOString(), read: false, ...notif }
+    setNotifications(prev => [n, ...prev].slice(0, 50))
+  }
+
+  const markRead = (id) => setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n))
+  const markAllRead = () => setNotifications(prev => prev.map(n => ({ ...n, read: true })))
+  const unreadCount = notifications.filter(n => !n.read).length
+
+  return <NotifCtx.Provider value={{ notifications, unreadCount, markRead, markAllRead, addNotification }}>{children}</NotifCtx.Provider>
+}
 
 // ═══════════════════════════════════════
 // DESIGN SYSTEM — Sexy UI
@@ -387,12 +536,12 @@ function Sidebar({ page, setPage, mobileOpen, setMobileOpen }) {
   const adminNav = [
     { sec: 'Main', items: [{ id: 'dashboard', icon: '📊', label: 'Dashboard' }] },
     { sec: 'People', items: [{ id: 'students', icon: '👥', label: 'Students' }, { id: 'admissions', icon: '📋', label: 'Admissions' }, { id: 'batches', icon: '🏫', label: 'Batches' }] },
-    { sec: 'Academic', items: [{ id: 'classes', icon: '📅', label: 'Classes' }, { id: 'attendance', icon: '✅', label: 'Attendance' }, { id: 'assignments', icon: '📝', label: 'Assignments' }, { id: 'submissions', icon: '📤', label: 'Submissions' }, { id: 'recordings', icon: '🎥', label: 'Recordings' }] },
-    { sec: 'Finance', items: [{ id: 'fees', icon: '💰', label: 'Fee Management' }] },
-    { sec: 'Tools', items: [{ id: 'announcements', icon: '📢', label: 'Announcements' }, { id: 'certificates', icon: '🎓', label: 'Certificates' }, { id: 'leaderboard', icon: '🏆', label: 'Leaderboard' }, { id: 'sync', icon: '🔄', label: 'Sheet Sync' }, { id: 'excel', icon: '📈', label: 'Import/Export' }, { id: 'settings', icon: '⚙️', label: 'Settings' }] },
+    { sec: 'Academic', items: [{ id: 'classes', icon: '📅', label: 'Classes' }, { id: 'attendance', icon: '✅', label: 'Attendance' }, { id: 'assignments', icon: '📝', label: 'Assignments' }, { id: 'submissions', icon: '📤', label: 'Submissions' }, { id: 'recordings', icon: '🎥', label: 'Recordings' }, { id: 'timetable', icon: '🗓', label: 'Timetable' }, { id: 'quizzes', icon: '🧠', label: 'Quizzes' }] },
+    { sec: 'Finance', items: [{ id: 'fees', icon: '💰', label: 'Fee Management' }, { id: 'analytics', icon: '📈', label: 'Analytics' }] },
+    { sec: 'Tools', items: [{ id: 'announcements', icon: '📢', label: 'Announcements' }, { id: 'progress', icon: '📄', label: 'Progress Report' }, { id: 'certificates', icon: '🎓', label: 'Certificates' }, { id: 'leaderboard', icon: '🏆', label: 'Leaderboard' }, { id: 'sync', icon: '🔄', label: 'Sheet Sync' }, { id: 'excel', icon: '📈', label: 'Import/Export' }, { id: 'settings', icon: '⚙️', label: 'Settings' }] },
   ]
   const studentNav = [
-    { sec: 'My Portal', items: [{ id: 'dashboard', icon: '📊', label: 'Dashboard' }, { id: 'attendance', icon: '✅', label: 'My Attendance' }, { id: 'assignments', icon: '📝', label: 'Assignments' }, { id: 'recordings', icon: '🎥', label: 'Recordings' }, { id: 'announcements', icon: '📢', label: 'Announcements' }, { id: 'fees', icon: '💰', label: 'My Fees' }, { id: 'certificate', icon: '🎓', label: 'Certificate' }, { id: 'profile', icon: '👤', label: 'My Profile' }] },
+    { sec: 'My Portal', items: [{ id: 'dashboard', icon: '📊', label: 'Dashboard' }, { id: 'attendance', icon: '✅', label: 'My Attendance' }, { id: 'assignments', icon: '📝', label: 'Assignments' }, { id: 'quizzes', icon: '🧠', label: 'Quizzes' }, { id: 'recordings', icon: '🎥', label: 'Recordings' }, { id: 'timetable', icon: '🗓', label: 'Timetable' }, { id: 'announcements', icon: '📢', label: 'Announcements' }, { id: 'fees', icon: '💰', label: 'My Fees' }, { id: 'certificate', icon: '🎓', label: 'Certificate' }, { id: 'profile', icon: '👤', label: 'My Profile' }] },
   ]
   const nav = role === 'admin' ? adminNav : studentNav
   const handleNav = id => { setPage(id); setMobileOpen(false) }
@@ -496,8 +645,14 @@ function Sidebar({ page, setPage, mobileOpen, setMobileOpen }) {
 // ═══════════════════════════════════════
 function TopBar({ title, pendingCount, setMobileOpen }) {
   const { user } = useAuth(); const { dark } = useTheme()
+  const { notifications, unreadCount, markRead, markAllRead } = useNotifications()
   const [time, setTime] = useState(''); const [showNotif, setShowNotif] = useState(false)
+  const notifRef = useRef(null)
   useEffect(() => { const t = () => setTime(new Date().toLocaleString('en-PK', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })); t(); const i = setInterval(t, 1000); return () => clearInterval(i) }, [])
+  useEffect(() => { const h = e => { if (notifRef.current && !notifRef.current.contains(e.target)) setShowNotif(false) }; document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h) }, [])
+
+  const totalUnread = unreadCount + (pendingCount || 0)
+  const notifIcons = { admission: '📋', assignment: '📝', fee: '💰', announcement: '📢', student: '👥', submission: '📤', system: '🔔' }
 
   return (
     <div style={{
@@ -518,41 +673,76 @@ function TopBar({ title, pendingCount, setMobileOpen }) {
         <div style={{ fontSize: 12, color: '#4B5563', fontFamily: "'Space Grotesk',sans-serif", letterSpacing: .5 }} className="hm">{time}</div>
         <div style={{ width: 1, height: 26, background: dark ? 'rgba(255,255,255,.04)' : 'rgba(0,0,0,.06)' }} className="hm" />
 
-        {/* Notification */}
-        <div style={{ position: 'relative' }}>
+        {/* Notification Bell */}
+        <div style={{ position: 'relative' }} ref={notifRef}>
           <button onClick={() => setShowNotif(!showNotif)} style={{
-            background: dark ? 'rgba(255,255,255,.03)' : 'rgba(0,0,0,.03)',
-            border: `1px solid ${dark ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.06)'}`,
+            background: showNotif ? 'rgba(255,215,0,.08)' : dark ? 'rgba(255,255,255,.03)' : 'rgba(0,0,0,.03)',
+            border: `1px solid ${showNotif ? 'rgba(255,215,0,.2)' : dark ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.06)'}`,
             width: 42, height: 42, borderRadius: 13, cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 20, position: 'relative', transition: tr,
           }}>
             🔔
-            {pendingCount > 0 && <span style={{
-              position: 'absolute', top: 2, right: 2, width: 18, height: 18, borderRadius: '50%',
-              background: '#EF4444', color: '#fff', fontSize: 9, fontWeight: 800,
+            {totalUnread > 0 && <span style={{
+              position: 'absolute', top: 2, right: 2, minWidth: 18, height: 18, borderRadius: '50%',
+              background: '#EF4444', color: '#fff', fontSize: 9, fontWeight: 800, padding: '0 4px',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               animation: 'pulseOnline 2s ease infinite', boxShadow: '0 0 8px rgba(239,68,68,.4)',
-            }}>{pendingCount > 9 ? '9+' : pendingCount}</span>}
+            }}>{totalUnread > 9 ? '9+' : totalUnread}</span>}
           </button>
 
           {showNotif && (
-            <div onClick={() => setShowNotif(false)} style={{
-              position: 'absolute', right: 0, top: '100%', marginTop: 10, width: 300,
-              ...getGlass(dark), borderRadius: 18, padding: 18,
-              boxShadow: '0 20px 50px rgba(0,0,0,.4)', zIndex: 200, animation: 'scaleIn .2s ease',
+            <div style={{
+              position: 'absolute', right: 0, top: '100%', marginTop: 10, width: 380,
+              ...getGlass(dark), borderRadius: 20, padding: 0, overflow: 'hidden',
+              boxShadow: '0 20px 50px rgba(0,0,0,.5)', zIndex: 200, animation: 'scaleIn .2s ease',
             }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: dark ? '#E5E7EB' : '#1F2937', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
-                🔔 Notifications {pendingCount > 0 && <Bdg type="danger" size="sm">{pendingCount}</Bdg>}
-              </div>
-              {pendingCount > 0 ? (
-                <div style={{ ...getGlassLight(dark), borderRadius: 12, padding: 14, borderLeft: '3px solid #F59E0B' }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: dark ? '#E5E7EB' : '#1F2937', marginBottom: 4 }}>⚠️ Pending Admissions</div>
-                  <div style={{ fontSize: 12, color: '#6B7280' }}>{pendingCount} application(s) waiting</div>
+              <div style={{ padding: '18px 20px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${dark ? 'rgba(255,215,0,.04)' : 'rgba(0,0,0,.05)'}` }}>
+                <div style={{ fontSize: 16, fontWeight: 700, color: dark ? '#E5E7EB' : '#1F2937', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  🔔 Notifications {totalUnread > 0 && <Bdg type="danger" size="sm">{totalUnread}</Bdg>}
                 </div>
-              ) : (
-                <div style={{ textAlign: 'center', padding: '24px 0', fontSize: 13, color: '#4B5563' }}>✅ All caught up!</div>
-              )}
+                {totalUnread > 0 && <button onClick={(e)=>{e.stopPropagation();markAllRead()}} style={{ background:'none', border:'none', color:'#FFD700', fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:"'Inter',sans-serif" }}>Mark all read</button>}
+              </div>
+
+              <div style={{ maxHeight: 380, overflowY: 'auto', padding: '8px 12px' }} className="cs">
+                {pendingCount > 0 && (
+                  <div style={{ ...getGlassLight(dark), borderRadius: 12, padding: 14, margin: '6px 0', borderLeft: '3px solid #F59E0B', cursor:'pointer' }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                      <span style={{ fontSize:18 }}>📋</span>
+                      <div style={{flex:1}}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: dark ? '#E5E7EB' : '#1F2937' }}>Pending Admissions</div>
+                        <div style={{ fontSize: 11, color: '#6B7280' }}>{pendingCount} application(s) waiting for review</div>
+                      </div>
+                      <div style={{ width:8, height:8, borderRadius:'50%', background:'#F59E0B', flexShrink:0 }}/>
+                    </div>
+                  </div>
+                )}
+
+                {notifications.slice(0, 15).map(n => (
+                  <div key={n.id} onClick={(e)=>{e.stopPropagation();markRead(n.id)}} style={{
+                    ...getGlassLight(dark), borderRadius: 12, padding: 14, margin: '6px 0',
+                    borderLeft: `3px solid ${n.read ? (dark ? 'rgba(255,255,255,.04)' : 'rgba(0,0,0,.04)') : '#FFD700'}`,
+                    cursor:'pointer', opacity: n.read ? 0.6 : 1, transition: tr,
+                  }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                      <span style={{ fontSize:18 }}>{notifIcons[n.type] || '🔔'}</span>
+                      <div style={{flex:1}}>
+                        <div style={{ fontSize: 13, fontWeight: n.read ? 500 : 700, color: dark ? '#E5E7EB' : '#1F2937' }}>{n.title}</div>
+                        <div style={{ fontSize: 11, color: '#6B7280', marginTop:2 }}>{n.message}</div>
+                      </div>
+                      {!n.read && <div style={{ width:8, height:8, borderRadius:'50%', background:'#FFD700', flexShrink:0, boxShadow:'0 0 6px rgba(255,215,0,.4)' }}/>}
+                    </div>
+                    <div style={{ fontSize: 10, color: '#374151', marginTop: 6, textAlign:'right' }}>{ago(n.time)}</div>
+                  </div>
+                ))}
+
+                {notifications.length === 0 && pendingCount === 0 && (
+                  <div style={{ textAlign: 'center', padding: '30px 0' }}>
+                    <div style={{ fontSize: 36, marginBottom: 10, opacity: .2 }}>🔔</div>
+                    <div style={{ fontSize: 13, color: '#4B5563' }}>All caught up! ✅</div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -782,7 +972,7 @@ function AdminDashboard() {
     } catch { toast.error('Failed', { id: 'sync' }) } finally { setSyncing(false) }
   }
 
-  if (loading) return <Loader />
+  if (loading) return <SkeletonDashboard />
 
   const pieData = [{ name: 'Collected', value: stats.totalPaid || 0 }, { name: 'Pending', value: (stats.totalFee || 0) - (stats.totalPaid || 0) }]; const PIE_COLORS = ['#10B981', '#EF4444']
 
@@ -1757,7 +1947,7 @@ function AdmissionsPage(){
   
   const filtered=admissions.filter(a=>{if(filters.status&&a.status!==filters.status)return false;return true})
   
-  if(loading)return <Loader/>
+  if(loading)return <SkeletonDashboard/>
   
   return(
     <>
@@ -1851,21 +2041,21 @@ function AdmissionsPage(){
   )
 }
 
-function BatchesPage(){const[batches,setBatches]=useState([]);const[loading,setLoading]=useState(true);const[modal,setModal]=useState(false);const[form,setForm]=useState({});const load=useCallback(async()=>{setLoading(true);const{data}=await sb.from('batches').select('*').order('created_at',{ascending:false});setBatches(data||[]);setLoading(false)},[]);useEffect(()=>{load()},[load]);const save=async()=>{if(!form.name){toast.error('Required');return};if(form.id){await sb.from('batches').update(form).eq('id',form.id)}else{await sb.from('batches').insert({...form,status:form.status||'active'})};toast.success('Saved!');setModal(false);load()};const del=async(id,name)=>{if(!confirm(`Delete "${name}"?`))return;await sb.from('batches').delete().eq('id',id);toast.success('Deleted');load()};if(loading)return <Loader/>;return(<><Card title={`Batches (${batches.length})`} icon="🏫" action={<Btn onClick={()=>{setForm({platform:'Google Meet',status:'active'});setModal(true)}} icon="➕">Add</Btn>} noPadding><Tbl headers={['Name','Schedule','Platform','Start','End','Status','Actions']} empty={batches.length===0?<Empty icon="🏫" title="No batches"/>:null}>{batches.map((b,i)=>(<TR key={b.id} delay={i*.04}><TD style={{fontWeight:600,color:'#E5E7EB'}}>{b.name}</TD><TD style={{fontSize:12}}>{b.schedule||'—'}</TD><TD style={{fontSize:12}}>{b.platform||'—'}</TD><TD style={{fontSize:12}}>{fmtDate(b.start_date)}</TD><TD style={{fontSize:12}}>{fmtDate(b.end_date)}</TD><TD><Bdg type={statusBadge(b.status)} dot>{b.status}</Bdg></TD><TD><div style={{display:'flex',gap:6}}><Btn type="outline" size="xs" onClick={()=>{setForm(b);setModal(true)}}>✏️</Btn><Btn type="danger" size="xs" onClick={()=>del(b.id,b.name)}>🗑</Btn></div></TD></TR>))}</Tbl></Card><Modal open={modal} onClose={()=>setModal(false)} title={form.id?'Edit':'Add Batch'} icon="🏫" footer={<><Btn type="ghost" onClick={()=>setModal(false)}>Cancel</Btn><Btn onClick={save}>Save</Btn></>}><Inp label="Name" required value={form.name||''} onChange={e=>setForm({...form,name:e.target.value})}/><Grid><Sel label="Platform" value={form.platform||'Google Meet'} onChange={e=>setForm({...form,platform:e.target.value})}><option>Google Meet</option><option>Zoom</option><option>Both</option></Sel><Sel label="Status" value={form.status||'active'} onChange={e=>setForm({...form,status:e.target.value})}><option value="active">Active</option><option value="upcoming">Upcoming</option><option value="completed">Completed</option></Sel><Inp label="Start" type="date" value={form.start_date||''} onChange={e=>setForm({...form,start_date:e.target.value})}/><Inp label="End" type="date" value={form.end_date||''} onChange={e=>setForm({...form,end_date:e.target.value})}/></Grid><Inp label="Schedule" placeholder="Mon & Thu, 7 PM" value={form.schedule||''} onChange={e=>setForm({...form,schedule:e.target.value})}/></Modal></>)}
+function BatchesPage(){const[batches,setBatches]=useState([]);const[loading,setLoading]=useState(true);const[modal,setModal]=useState(false);const[form,setForm]=useState({});const load=useCallback(async()=>{setLoading(true);const{data}=await sb.from('batches').select('*').order('created_at',{ascending:false});setBatches(data||[]);setLoading(false)},[]);useEffect(()=>{load()},[load]);const save=async()=>{if(!form.name){toast.error('Required');return};if(form.id){await sb.from('batches').update(form).eq('id',form.id)}else{await sb.from('batches').insert({...form,status:form.status||'active'})};toast.success('Saved!');setModal(false);load()};const del=async(id,name)=>{if(!confirm(`Delete "${name}"?`))return;await sb.from('batches').delete().eq('id',id);toast.success('Deleted');load()};if(loading)return <SkeletonDashboard/>;return(<><Card title={`Batches (${batches.length})`} icon="🏫" action={<Btn onClick={()=>{setForm({platform:'Google Meet',status:'active'});setModal(true)}} icon="➕">Add</Btn>} noPadding><Tbl headers={['Name','Schedule','Platform','Start','End','Status','Actions']} empty={batches.length===0?<Empty icon="🏫" title="No batches"/>:null}>{batches.map((b,i)=>(<TR key={b.id} delay={i*.04}><TD style={{fontWeight:600,color:'#E5E7EB'}}>{b.name}</TD><TD style={{fontSize:12}}>{b.schedule||'—'}</TD><TD style={{fontSize:12}}>{b.platform||'—'}</TD><TD style={{fontSize:12}}>{fmtDate(b.start_date)}</TD><TD style={{fontSize:12}}>{fmtDate(b.end_date)}</TD><TD><Bdg type={statusBadge(b.status)} dot>{b.status}</Bdg></TD><TD><div style={{display:'flex',gap:6}}><Btn type="outline" size="xs" onClick={()=>{setForm(b);setModal(true)}}>✏️</Btn><Btn type="danger" size="xs" onClick={()=>del(b.id,b.name)}>🗑</Btn></div></TD></TR>))}</Tbl></Card><Modal open={modal} onClose={()=>setModal(false)} title={form.id?'Edit':'Add Batch'} icon="🏫" footer={<><Btn type="ghost" onClick={()=>setModal(false)}>Cancel</Btn><Btn onClick={save}>Save</Btn></>}><Inp label="Name" required value={form.name||''} onChange={e=>setForm({...form,name:e.target.value})}/><Grid><Sel label="Platform" value={form.platform||'Google Meet'} onChange={e=>setForm({...form,platform:e.target.value})}><option>Google Meet</option><option>Zoom</option><option>Both</option></Sel><Sel label="Status" value={form.status||'active'} onChange={e=>setForm({...form,status:e.target.value})}><option value="active">Active</option><option value="upcoming">Upcoming</option><option value="completed">Completed</option></Sel><Inp label="Start" type="date" value={form.start_date||''} onChange={e=>setForm({...form,start_date:e.target.value})}/><Inp label="End" type="date" value={form.end_date||''} onChange={e=>setForm({...form,end_date:e.target.value})}/></Grid><Inp label="Schedule" placeholder="Mon & Thu, 7 PM" value={form.schedule||''} onChange={e=>setForm({...form,schedule:e.target.value})}/></Modal></>)}
 
-function ClassesPage(){const[classes,setClasses]=useState([]);const[batches,setBatches]=useState([]);const[loading,setLoading]=useState(true);const[modal,setModal]=useState(false);const[form,setForm]=useState({});const[filters,setFilters]=useState({});const load=useCallback(async()=>{setLoading(true);const[c,b]=await Promise.all([sb.from('classes').select('*').order('class_number'),sb.from('batches').select('*')]);setClasses(c.data||[]);setBatches(b.data||[]);setLoading(false)},[]);useEffect(()=>{load()},[load]);const save=async()=>{if(!form.class_number||!form.title||!form.batch_id){toast.error('Required');return};const data={...form,class_number:parseInt(form.class_number)};if(form.id){await sb.from('classes').update(data).eq('id',form.id)}else{await sb.from('classes').insert({...data,status:form.status||'scheduled'})};toast.success('Saved!');setModal(false);load()};const del=async id=>{if(!confirm('Delete?'))return;await sb.from('attendance').delete().eq('class_id',id);await sb.from('classes').delete().eq('id',id);toast.success('Deleted');load()};const filtered=classes.filter(c=>{if(filters.batch&&c.batch_id!==filters.batch)return false;if(filters.status&&c.status!==filters.status)return false;return true});if(loading)return <Loader/>;return(<><FilterBar filters={[{key:'batch',label:'Batch',options:batches.map(b=>({value:b.id,label:b.name}))},{key:'status',label:'Status',options:['scheduled','live','completed']}]} values={filters} onChange={setFilters}/><Card title={`Classes (${filtered.length})`} icon="📅" action={<Btn onClick={()=>{setForm({status:'scheduled'});setModal(true)}} icon="➕">Add</Btn>} noPadding><Tbl headers={['#','Title','Batch','Date','Time','Recording','Status','Actions']} empty={filtered.length===0?<Empty icon="📅" title="No classes"/>:null}>{filtered.map((c,i)=>(<TR key={c.id} delay={i*.04}><TD><Bdg type="gold">C{c.class_number}</Bdg></TD><TD style={{fontWeight:600,maxWidth:200,color:'#E5E7EB'}}>{c.title}</TD><TD style={{fontSize:12}}>{batches.find(b=>b.id===c.batch_id)?.name||'—'}</TD><TD style={{fontSize:12}}>{fmtDate(c.date)}</TD><TD style={{fontSize:12}}>{c.time||'—'}</TD><TD>{c.recording_url?<a href={c.recording_url} target="_blank" rel="noreferrer" style={{color:'#FFD700',fontSize:12,fontWeight:600}}>▶</a>:'—'}</TD><TD><Bdg type={statusBadge(c.status)} dot>{c.status}</Bdg></TD><TD><div style={{display:'flex',gap:6}}><Btn type="outline" size="xs" onClick={()=>{setForm(c);setModal(true)}}>✏️</Btn><Btn type="danger" size="xs" onClick={()=>del(c.id)}>🗑</Btn></div></TD></TR>))}</Tbl></Card><Modal open={modal} onClose={()=>setModal(false)} title={form.id?'Edit':'Add Class'} icon="📅" footer={<><Btn type="ghost" onClick={()=>setModal(false)}>Cancel</Btn><Btn onClick={save}>Save</Btn></>}><Grid><Inp label="#" required type="number" value={form.class_number||''} onChange={e=>setForm({...form,class_number:e.target.value})}/><Sel label="Batch" required value={form.batch_id||''} onChange={e=>setForm({...form,batch_id:e.target.value})}><option value="">Select</option>{batches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</Sel></Grid><Inp label="Title" required value={form.title||''} onChange={e=>setForm({...form,title:e.target.value})}/><Grid><Inp label="Date" type="date" value={form.date||''} onChange={e=>setForm({...form,date:e.target.value})}/><Inp label="Time" value={form.time||''} onChange={e=>setForm({...form,time:e.target.value})}/></Grid><Inp label="Recording" value={form.recording_url||''} onChange={e=>setForm({...form,recording_url:e.target.value})}/><Sel label="Status" value={form.status||'scheduled'} onChange={e=>setForm({...form,status:e.target.value})}><option value="scheduled">Scheduled</option><option value="live">Live</option><option value="completed">Completed</option></Sel><TA label="Notes" value={form.notes||''} onChange={e=>setForm({...form,notes:e.target.value})}/></Modal></>)}
+function ClassesPage(){const[classes,setClasses]=useState([]);const[batches,setBatches]=useState([]);const[loading,setLoading]=useState(true);const[modal,setModal]=useState(false);const[form,setForm]=useState({});const[filters,setFilters]=useState({});const load=useCallback(async()=>{setLoading(true);const[c,b]=await Promise.all([sb.from('classes').select('*').order('class_number'),sb.from('batches').select('*')]);setClasses(c.data||[]);setBatches(b.data||[]);setLoading(false)},[]);useEffect(()=>{load()},[load]);const save=async()=>{if(!form.class_number||!form.title||!form.batch_id){toast.error('Required');return};const data={...form,class_number:parseInt(form.class_number)};if(form.id){await sb.from('classes').update(data).eq('id',form.id)}else{await sb.from('classes').insert({...data,status:form.status||'scheduled'})};toast.success('Saved!');setModal(false);load()};const del=async id=>{if(!confirm('Delete?'))return;await sb.from('attendance').delete().eq('class_id',id);await sb.from('classes').delete().eq('id',id);toast.success('Deleted');load()};const filtered=classes.filter(c=>{if(filters.batch&&c.batch_id!==filters.batch)return false;if(filters.status&&c.status!==filters.status)return false;return true});if(loading)return <SkeletonDashboard/>;return(<><FilterBar filters={[{key:'batch',label:'Batch',options:batches.map(b=>({value:b.id,label:b.name}))},{key:'status',label:'Status',options:['scheduled','live','completed']}]} values={filters} onChange={setFilters}/><Card title={`Classes (${filtered.length})`} icon="📅" action={<Btn onClick={()=>{setForm({status:'scheduled'});setModal(true)}} icon="➕">Add</Btn>} noPadding><Tbl headers={['#','Title','Batch','Date','Time','Recording','Status','Actions']} empty={filtered.length===0?<Empty icon="📅" title="No classes"/>:null}>{filtered.map((c,i)=>(<TR key={c.id} delay={i*.04}><TD><Bdg type="gold">C{c.class_number}</Bdg></TD><TD style={{fontWeight:600,maxWidth:200,color:'#E5E7EB'}}>{c.title}</TD><TD style={{fontSize:12}}>{batches.find(b=>b.id===c.batch_id)?.name||'—'}</TD><TD style={{fontSize:12}}>{fmtDate(c.date)}</TD><TD style={{fontSize:12}}>{c.time||'—'}</TD><TD>{c.recording_url?<a href={c.recording_url} target="_blank" rel="noreferrer" style={{color:'#FFD700',fontSize:12,fontWeight:600}}>▶</a>:'—'}</TD><TD><Bdg type={statusBadge(c.status)} dot>{c.status}</Bdg></TD><TD><div style={{display:'flex',gap:6}}><Btn type="outline" size="xs" onClick={()=>{setForm(c);setModal(true)}}>✏️</Btn><Btn type="danger" size="xs" onClick={()=>del(c.id)}>🗑</Btn></div></TD></TR>))}</Tbl></Card><Modal open={modal} onClose={()=>setModal(false)} title={form.id?'Edit':'Add Class'} icon="📅" footer={<><Btn type="ghost" onClick={()=>setModal(false)}>Cancel</Btn><Btn onClick={save}>Save</Btn></>}><Grid><Inp label="#" required type="number" value={form.class_number||''} onChange={e=>setForm({...form,class_number:e.target.value})}/><Sel label="Batch" required value={form.batch_id||''} onChange={e=>setForm({...form,batch_id:e.target.value})}><option value="">Select</option>{batches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</Sel></Grid><Inp label="Title" required value={form.title||''} onChange={e=>setForm({...form,title:e.target.value})}/><Grid><Inp label="Date" type="date" value={form.date||''} onChange={e=>setForm({...form,date:e.target.value})}/><Inp label="Time" value={form.time||''} onChange={e=>setForm({...form,time:e.target.value})}/></Grid><Inp label="Recording" value={form.recording_url||''} onChange={e=>setForm({...form,recording_url:e.target.value})}/><Sel label="Status" value={form.status||'scheduled'} onChange={e=>setForm({...form,status:e.target.value})}><option value="scheduled">Scheduled</option><option value="live">Live</option><option value="completed">Completed</option></Sel><TA label="Notes" value={form.notes||''} onChange={e=>setForm({...form,notes:e.target.value})}/></Modal></>)}
 
 function AttendancePage(){const[batches,setBatches]=useState([]);const[classes,setClasses]=useState([]);const[students,setStudents]=useState([]);const[att,setAtt]=useState({});const[selB,setSelB]=useState('');const[selC,setSelC]=useState('');const[repB,setRepB]=useState('');const[report,setReport]=useState([]);const[saving,setSaving]=useState(false);const{dark}=useTheme();useEffect(()=>{sb.from('batches').select('*').then(r=>setBatches(r.data||[]))},[]);const loadC=async bid=>{setSelB(bid);setSelC('');setStudents([]);const{data}=await sb.from('classes').select('*').eq('batch_id',bid).order('class_number');setClasses(data||[])};const loadS=async cid=>{setSelC(cid);const[s,a]=await Promise.all([sb.from('students').select('*').eq('batch_id',selB).eq('status','active'),sb.from('attendance').select('*').eq('class_id',cid)]);const map={};(a.data||[]).forEach(x=>map[x.student_id]=x.status);const state={};(s.data||[]).forEach(x=>state[x.id]=map[x.id]||'absent');setStudents(s.data||[]);setAtt(state)};const toggle=id=>{const states=['present','absent','late'];setAtt(p=>({...p,[id]:states[(states.indexOf(p[id]||'absent')+1)%3]}))};const markAll=st=>{const n={};students.forEach(s=>n[s.id]=st);setAtt(n)};const save=async()=>{if(!selC)return;setSaving(true);await sb.from('attendance').delete().eq('class_id',selC);await sb.from('attendance').insert(students.map(s=>({class_id:selC,student_id:s.id,status:att[s.id]||'absent'})));toast.success('Saved!');const[allA,allS,allC]=await Promise.all([sb.from('attendance').select('*'),sb.from('students').select('*'),sb.from('classes').select('*')]);await syncToSheet('syncAttendance',{records:(allA.data||[]).map(a=>({student_name:allS.data?.find(s=>s.id===a.student_id)?.full_name||'',class_number:allC.data?.find(c=>c.id===a.class_id)?.class_number||'',class_title:allC.data?.find(c=>c.id===a.class_id)?.title||'',date:fmtDate(a.marked_at||new Date()),status:a.status}))});setSaving(false)};const loadReport=async bid=>{setRepB(bid);const[s,c]=await Promise.all([sb.from('students').select('*').eq('batch_id',bid),sb.from('classes').select('*').eq('batch_id',bid)]);const total=(c.data||[]).length;const rows=await Promise.all((s.data||[]).map(async st=>{const{data:a}=await sb.from('attendance').select('*').eq('student_id',st.id);const present=(a||[]).filter(x=>x.status==='present').length;return{...st,present,total,pct:total>0?Math.round((present/total)*100):0}}));setReport(rows)};const attColors={present:{border:'rgba(16,185,129,.4)',bg:'rgba(16,185,129,.05)',color:'#10B981'},absent:{border:'rgba(239,68,68,.4)',bg:'rgba(239,68,68,.05)',color:'#EF4444'},late:{border:'rgba(245,158,11,.4)',bg:'rgba(245,158,11,.05)',color:'#F59E0B'}};return(<div><Card title="✅ Mark Attendance" icon="✅" action={<Btn type="outline" size="sm" icon="📊" onClick={()=>openSheet('attendance')}>Sheet</Btn>}><Grid gap={18} style={{marginBottom:22}}><Sel label="Batch" value={selB} onChange={e=>loadC(e.target.value)}><option value="">Select</option>{batches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</Sel><Sel label="Class" value={selC} onChange={e=>loadS(e.target.value)}><option value="">Select</option>{classes.map(c=><option key={c.id} value={c.id}>C{c.class_number} — {c.title}</option>)}</Sel></Grid>{students.length>0&&<><div style={{display:'flex',gap:10,marginBottom:18}}><Btn type="success" size="sm" onClick={()=>markAll('present')}>✅ All Present</Btn><Btn type="danger" size="sm" onClick={()=>markAll('absent')}>❌ All Absent</Btn><Btn type="warning" size="sm" onClick={()=>markAll('late')}>⏰ Late</Btn></div><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(135px,1fr))',gap:12,marginBottom:22}}>{students.map(s=>{const st=att[s.id]||'absent';const c=attColors[st]||attColors.absent;return(<div key={s.id} onClick={()=>toggle(s.id)} style={{background:c.bg,border:`1.5px solid ${c.border}`,borderRadius:14,padding:16,textAlign:'center',cursor:'pointer',transition:tr}}><Av name={s.full_name} size={44}/><div style={{fontSize:12,fontWeight:700,marginTop:9,color:dark?'#E5E7EB':'#1F2937'}}>{s.full_name.split(' ')[0]}</div><div style={{fontSize:10,textTransform:'uppercase',letterSpacing:1.2,marginTop:5,color:c.color,fontWeight:700}}>{st}</div></div>)})}</div><Btn onClick={save} disabled={saving} loading={saving}>{saving?'Saving...':'💾 Save & Sync'}</Btn></>}</Card><Card title="📊 Report" icon="📊" action={report.length>0?<Btn type="success" size="sm" onClick={()=>exportXLS(report.map(s=>({Student:s.full_name,Present:s.present,Total:s.total,'%':s.pct+'%'})),'Attendance.xlsx')} icon="📊">Export</Btn>:null}><Sel label="Batch" value={repB} onChange={e=>loadReport(e.target.value)}><option value="">Select</option>{batches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</Sel>{report.length>0&&<Tbl headers={['Student','Present','Total','Attendance','Status']}>{report.map((s,i)=>(<TR key={s.id} delay={i*.04}><TD><div style={{display:'flex',alignItems:'center',gap:8}}><Av name={s.full_name} size={32}/><span style={{fontWeight:600}}>{s.full_name}</span></div></TD><TD style={{color:'#10B981',fontWeight:700}}>{s.present}</TD><TD>{s.total}</TD><TD><div style={{display:'flex',alignItems:'center',gap:10}}><div style={{width:85}}><PBar value={s.present} max={s.total}/></div><span style={{fontWeight:700,color:attColor(s.pct)}}>{s.pct}%</span></div></TD><TD><Bdg type={s.pct>=80?'success':s.pct>=60?'warning':'danger'} dot>{s.pct>=80?'Good':'<80%'}</Bdg></TD></TR>))}</Tbl>}</Card></div>)}
 
-function AssignmentsPage(){const[assignments,setAssignments]=useState([]);const[batches,setBatches]=useState([]);const[classes,setClasses]=useState([]);const[loading,setLoading]=useState(true);const[modal,setModal]=useState(false);const[form,setForm]=useState({});const[filters,setFilters]=useState({});const load=useCallback(async()=>{setLoading(true);const[a,b,c]=await Promise.all([sb.from('assignments').select('*').order('created_at',{ascending:false}),sb.from('batches').select('*'),sb.from('classes').select('*').order('class_number')]);setAssignments(a.data||[]);setBatches(b.data||[]);setClasses(c.data||[]);setLoading(false)},[]);useEffect(()=>{load()},[load]);const save=async()=>{if(!form.title||!form.batch_id||!form.due_date){toast.error('Required');return};await sb.from('assignments').insert({...form,total_marks:parseInt(form.total_marks)||100});toast.success('Created!');setModal(false);load()};const del=async id=>{if(!confirm('Delete?'))return;await sb.from('submissions').delete().eq('assignment_id',id);await sb.from('assignments').delete().eq('id',id);toast.success('Deleted');load()};const filtered=assignments.filter(a=>{if(filters.batch&&a.batch_id!==filters.batch)return false;return true});if(loading)return <Loader/>;return(<><FilterBar filters={[{key:'batch',label:'Batch',options:batches.map(b=>({value:b.id,label:b.name}))}]} values={filters} onChange={setFilters}/><Card title={`Assignments (${filtered.length})`} icon="📝" action={<div style={{display:'flex',gap:10}}><Btn type="outline" size="sm" icon="📊" onClick={()=>openSheet('assignments')}>Sheet</Btn><Btn onClick={()=>{setForm({total_marks:100});setModal(true)}} icon="➕">Create</Btn></div>} noPadding><Tbl headers={['Title','Batch','Class','Due','Marks','Actions']} empty={filtered.length===0?<Empty icon="📝" title="No assignments"/>:null}>{filtered.map((a,i)=>(<TR key={a.id} delay={i*.04}><TD style={{fontWeight:600,color:'#E5E7EB'}}>{a.title}</TD><TD style={{fontSize:12}}>{batches.find(b=>b.id===a.batch_id)?.name||'—'}</TD><TD style={{fontSize:12}}>{classes.find(c=>c.id===a.class_id)?'C'+classes.find(c=>c.id===a.class_id)?.class_number:'—'}</TD><TD style={{fontSize:12}}>{fmtDT(a.due_date)}</TD><TD><Bdg type="gold">{a.total_marks}pts</Bdg></TD><TD><Btn type="danger" size="xs" onClick={()=>del(a.id)}>🗑</Btn></TD></TR>))}</Tbl></Card><Modal open={modal} onClose={()=>setModal(false)} title="Create Assignment" icon="📝" footer={<><Btn type="ghost" onClick={()=>setModal(false)}>Cancel</Btn><Btn onClick={save}>Create</Btn></>}><Inp label="Title" required onChange={e=>setForm({...form,title:e.target.value})}/><TA label="Description" onChange={e=>setForm({...form,description:e.target.value})}/><Grid><Sel label="Batch" required onChange={e=>setForm({...form,batch_id:e.target.value})}><option value="">Select</option>{batches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</Sel><Sel label="Class" onChange={e=>setForm({...form,class_id:e.target.value})}><option value="">Select</option>{classes.map(c=><option key={c.id} value={c.id}>C{c.class_number}</option>)}</Sel><Inp label="Due" required type="datetime-local" onChange={e=>setForm({...form,due_date:e.target.value})}/><Inp label="Marks" type="number" value={form.total_marks||100} onChange={e=>setForm({...form,total_marks:e.target.value})}/></Grid></Modal></>)}
+function AssignmentsPage(){const[assignments,setAssignments]=useState([]);const[batches,setBatches]=useState([]);const[classes,setClasses]=useState([]);const[loading,setLoading]=useState(true);const[modal,setModal]=useState(false);const[form,setForm]=useState({});const[filters,setFilters]=useState({});const load=useCallback(async()=>{setLoading(true);const[a,b,c]=await Promise.all([sb.from('assignments').select('*').order('created_at',{ascending:false}),sb.from('batches').select('*'),sb.from('classes').select('*').order('class_number')]);setAssignments(a.data||[]);setBatches(b.data||[]);setClasses(c.data||[]);setLoading(false)},[]);useEffect(()=>{load()},[load]);const save=async()=>{if(!form.title||!form.batch_id||!form.due_date){toast.error('Required');return};await sb.from('assignments').insert({...form,total_marks:parseInt(form.total_marks)||100});toast.success('Created!');setModal(false);load()};const del=async id=>{if(!confirm('Delete?'))return;await sb.from('submissions').delete().eq('assignment_id',id);await sb.from('assignments').delete().eq('id',id);toast.success('Deleted');load()};const filtered=assignments.filter(a=>{if(filters.batch&&a.batch_id!==filters.batch)return false;return true});if(loading)return <SkeletonDashboard/>;return(<><FilterBar filters={[{key:'batch',label:'Batch',options:batches.map(b=>({value:b.id,label:b.name}))}]} values={filters} onChange={setFilters}/><Card title={`Assignments (${filtered.length})`} icon="📝" action={<div style={{display:'flex',gap:10}}><Btn type="outline" size="sm" icon="📊" onClick={()=>openSheet('assignments')}>Sheet</Btn><Btn onClick={()=>{setForm({total_marks:100});setModal(true)}} icon="➕">Create</Btn></div>} noPadding><Tbl headers={['Title','Batch','Class','Due','Marks','Actions']} empty={filtered.length===0?<Empty icon="📝" title="No assignments"/>:null}>{filtered.map((a,i)=>(<TR key={a.id} delay={i*.04}><TD style={{fontWeight:600,color:'#E5E7EB'}}>{a.title}</TD><TD style={{fontSize:12}}>{batches.find(b=>b.id===a.batch_id)?.name||'—'}</TD><TD style={{fontSize:12}}>{classes.find(c=>c.id===a.class_id)?'C'+classes.find(c=>c.id===a.class_id)?.class_number:'—'}</TD><TD style={{fontSize:12}}>{fmtDT(a.due_date)}</TD><TD><Bdg type="gold">{a.total_marks}pts</Bdg></TD><TD><Btn type="danger" size="xs" onClick={()=>del(a.id)}>🗑</Btn></TD></TR>))}</Tbl></Card><Modal open={modal} onClose={()=>setModal(false)} title="Create Assignment" icon="📝" footer={<><Btn type="ghost" onClick={()=>setModal(false)}>Cancel</Btn><Btn onClick={save}>Create</Btn></>}><Inp label="Title" required onChange={e=>setForm({...form,title:e.target.value})}/><TA label="Description" onChange={e=>setForm({...form,description:e.target.value})}/><Grid><Sel label="Batch" required onChange={e=>setForm({...form,batch_id:e.target.value})}><option value="">Select</option>{batches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</Sel><Sel label="Class" onChange={e=>setForm({...form,class_id:e.target.value})}><option value="">Select</option>{classes.map(c=><option key={c.id} value={c.id}>C{c.class_number}</option>)}</Sel><Inp label="Due" required type="datetime-local" onChange={e=>setForm({...form,due_date:e.target.value})}/><Inp label="Marks" type="number" value={form.total_marks||100} onChange={e=>setForm({...form,total_marks:e.target.value})}/></Grid></Modal></>)}
 
-function SubmissionsPage(){const[subs,setSubs]=useState([]);const[students,setStudents]=useState([]);const[assignments,setAssignments]=useState([]);const[loading,setLoading]=useState(true);const[modal,setModal]=useState(null);const[form,setForm]=useState({});const[filter,setFilter]=useState('all');const load=useCallback(async()=>{setLoading(true);const[s,st,a]=await Promise.all([sb.from('submissions').select('*').order('submitted_at',{ascending:false}),sb.from('students').select('*'),sb.from('assignments').select('*')]);setSubs(s.data||[]);setStudents(st.data||[]);setAssignments(a.data||[]);setLoading(false)},[]);useEffect(()=>{load()},[load]);const saveGrade=async()=>{await sb.from('submissions').update({marks_obtained:parseFloat(form.marks),feedback:form.feedback,status:'graded'}).eq('id',form.id);toast.success('Graded! ✅');setModal(null);load()};const filtered=filter==='all'?subs:filter==='pending'?subs.filter(s=>s.marks_obtained==null):subs.filter(s=>s.marks_obtained!=null);if(loading)return <Loader/>;return(<><Card title={`Submissions (${subs.length})`} icon="📤" action={<div style={{display:'flex',gap:10}}><select value={filter} onChange={e=>setFilter(e.target.value)} style={{background:'#0A0A0B',border:'1px solid rgba(255,255,255,.06)',color:'#E5E7EB',padding:'9px 14px',borderRadius:11,fontSize:12,fontFamily:"'Inter',sans-serif",outline:'none'}}><option value="all">All</option><option value="pending">Pending</option><option value="graded">Graded</option></select><Btn type="success" size="sm" onClick={()=>exportXLS(subs.map(s=>({Student:students.find(x=>x.id===s.student_id)?.full_name||'',Assignment:assignments.find(x=>x.id===s.assignment_id)?.title||'',Marks:s.marks_obtained||'',Status:s.status})),'Submissions.xlsx')} icon="📊">Export</Btn><Btn type="outline" size="sm" icon="📊" onClick={()=>openSheet('submissions')}>Sheet</Btn></div>} noPadding><Tbl headers={['Student','Assignment','Submitted','Link','Marks','Status','Action']} empty={filtered.length===0?<Empty icon="📤" title="No submissions"/>:null}>{filtered.map((s,i)=>{const st=students.find(x=>x.id===s.student_id);const a=assignments.find(x=>x.id===s.assignment_id);return(<TR key={s.id} delay={i*.04}><TD><div style={{display:'flex',alignItems:'center',gap:8}}><Av name={st?.full_name||'?'} size={32}/><span style={{fontWeight:600,fontSize:13,color:'#E5E7EB'}}>{st?.full_name||'—'}</span></div></TD><TD style={{fontSize:12}}>{a?.title||'—'}</TD><TD style={{fontSize:12}}>{fmtDT(s.submitted_at)}</TD><TD>{s.submission_link?<a href={s.submission_link} target="_blank" rel="noreferrer" style={{color:'#FFD700',fontSize:12}}>🔗</a>:'—'}</TD><TD>{s.marks_obtained!=null?<span style={{fontWeight:800,color:'#FFD700'}}>{s.marks_obtained}/{a?.total_marks||100}</span>:'—'}</TD><TD><Bdg type={s.marks_obtained!=null?'success':'warning'} dot>{s.marks_obtained!=null?'Graded':'Pending'}</Bdg></TD><TD><Btn type="outline" size="xs" onClick={()=>{setForm({id:s.id,marks:s.marks_obtained||'',feedback:s.feedback||'',link:s.submission_link,text:s.submission_text,total:a?.total_marks||100});setModal('grade')}}>✏️</Btn></TD></TR>)})}</Tbl></Card><Modal open={modal==='grade'} onClose={()=>setModal(null)} title="Grade" icon="✏️" footer={<><Btn type="ghost" onClick={()=>setModal(null)}>Cancel</Btn><Btn onClick={saveGrade}>💾 Save</Btn></>}>{form.link&&<div style={{marginBottom:14}}><a href={form.link} target="_blank" rel="noreferrer"><Btn type="outline" size="sm">🔗 View</Btn></a></div>}<Inp label={`Marks (/${form.total})`} type="number" value={form.marks} onChange={e=>setForm({...form,marks:e.target.value})}/><TA label="Feedback" value={form.feedback} onChange={e=>setForm({...form,feedback:e.target.value})}/></Modal></>)}
+function SubmissionsPage(){const[subs,setSubs]=useState([]);const[students,setStudents]=useState([]);const[assignments,setAssignments]=useState([]);const[loading,setLoading]=useState(true);const[modal,setModal]=useState(null);const[form,setForm]=useState({});const[filter,setFilter]=useState('all');const load=useCallback(async()=>{setLoading(true);const[s,st,a]=await Promise.all([sb.from('submissions').select('*').order('submitted_at',{ascending:false}),sb.from('students').select('*'),sb.from('assignments').select('*')]);setSubs(s.data||[]);setStudents(st.data||[]);setAssignments(a.data||[]);setLoading(false)},[]);useEffect(()=>{load()},[load]);const saveGrade=async()=>{await sb.from('submissions').update({marks_obtained:parseFloat(form.marks),feedback:form.feedback,status:'graded'}).eq('id',form.id);toast.success('Graded! ✅');setModal(null);load()};const filtered=filter==='all'?subs:filter==='pending'?subs.filter(s=>s.marks_obtained==null):subs.filter(s=>s.marks_obtained!=null);if(loading)return <SkeletonDashboard/>;return(<><Card title={`Submissions (${subs.length})`} icon="📤" action={<div style={{display:'flex',gap:10}}><select value={filter} onChange={e=>setFilter(e.target.value)} style={{background:'#0A0A0B',border:'1px solid rgba(255,255,255,.06)',color:'#E5E7EB',padding:'9px 14px',borderRadius:11,fontSize:12,fontFamily:"'Inter',sans-serif",outline:'none'}}><option value="all">All</option><option value="pending">Pending</option><option value="graded">Graded</option></select><Btn type="success" size="sm" onClick={()=>exportXLS(subs.map(s=>({Student:students.find(x=>x.id===s.student_id)?.full_name||'',Assignment:assignments.find(x=>x.id===s.assignment_id)?.title||'',Marks:s.marks_obtained||'',Status:s.status})),'Submissions.xlsx')} icon="📊">Export</Btn><Btn type="outline" size="sm" icon="📊" onClick={()=>openSheet('submissions')}>Sheet</Btn></div>} noPadding><Tbl headers={['Student','Assignment','Submitted','Link','Marks','Status','Action']} empty={filtered.length===0?<Empty icon="📤" title="No submissions"/>:null}>{filtered.map((s,i)=>{const st=students.find(x=>x.id===s.student_id);const a=assignments.find(x=>x.id===s.assignment_id);return(<TR key={s.id} delay={i*.04}><TD><div style={{display:'flex',alignItems:'center',gap:8}}><Av name={st?.full_name||'?'} size={32}/><span style={{fontWeight:600,fontSize:13,color:'#E5E7EB'}}>{st?.full_name||'—'}</span></div></TD><TD style={{fontSize:12}}>{a?.title||'—'}</TD><TD style={{fontSize:12}}>{fmtDT(s.submitted_at)}</TD><TD>{s.submission_link?<a href={s.submission_link} target="_blank" rel="noreferrer" style={{color:'#FFD700',fontSize:12}}>🔗</a>:'—'}</TD><TD>{s.marks_obtained!=null?<span style={{fontWeight:800,color:'#FFD700'}}>{s.marks_obtained}/{a?.total_marks||100}</span>:'—'}</TD><TD><Bdg type={s.marks_obtained!=null?'success':'warning'} dot>{s.marks_obtained!=null?'Graded':'Pending'}</Bdg></TD><TD><Btn type="outline" size="xs" onClick={()=>{setForm({id:s.id,marks:s.marks_obtained||'',feedback:s.feedback||'',link:s.submission_link,text:s.submission_text,total:a?.total_marks||100});setModal('grade')}}>✏️</Btn></TD></TR>)})}</Tbl></Card><Modal open={modal==='grade'} onClose={()=>setModal(null)} title="Grade" icon="✏️" footer={<><Btn type="ghost" onClick={()=>setModal(null)}>Cancel</Btn><Btn onClick={saveGrade}>💾 Save</Btn></>}>{form.link&&<div style={{marginBottom:14}}><a href={form.link} target="_blank" rel="noreferrer"><Btn type="outline" size="sm">🔗 View</Btn></a></div>}<Inp label={`Marks (/${form.total})`} type="number" value={form.marks} onChange={e=>setForm({...form,marks:e.target.value})}/><TA label="Feedback" value={form.feedback} onChange={e=>setForm({...form,feedback:e.target.value})}/></Modal></>)}
 
-function RecordingsPage(){const[classes,setClasses]=useState([]);const[batches,setBatches]=useState([]);const[loading,setLoading]=useState(true);const[modal,setModal]=useState(null);const[form,setForm]=useState({});const[uploading,setUploading]=useState(false);const[filterBatch,setFilterBatch]=useState('');const{dark}=useTheme();const load=useCallback(async()=>{setLoading(true);const[c,b]=await Promise.all([sb.from('classes').select('*').order('class_number'),sb.from('batches').select('*')]);setClasses(c.data||[]);setBatches(b.data||[]);setLoading(false)},[]);useEffect(()=>{load()},[load]);const handleFile=async e=>{const file=e.target.files[0];if(!file)return;setUploading(true);try{const ext=file.name.split('.').pop();const url=await uploadFile(file,'recordings',`recordings/c${form.class_number||'x'}-${Date.now()}.${ext}`);setForm(f=>({...f,recording_url:url}));toast.success('Uploaded!')}catch{toast.error('Failed')}finally{setUploading(false);e.target.value=''}};const save=async()=>{if(!form.recording_url){toast.error('Add URL');return};await sb.from('classes').update({recording_url:form.recording_url,notes:form.notes,status:'completed'}).eq('id',form.id);toast.success('Saved!');setModal(null);load()};const filtered=filterBatch?classes.filter(c=>c.batch_id===filterBatch):classes;if(loading)return <Loader/>;return(<><Card title={`Recordings (${classes.filter(c=>c.recording_url).length}/${classes.length})`} icon="🎥" action={<select value={filterBatch} onChange={e=>setFilterBatch(e.target.value)} style={{background:'#0A0A0B',border:'1px solid rgba(255,255,255,.06)',color:'#E5E7EB',padding:'9px 14px',borderRadius:11,fontSize:12,fontFamily:"'Inter',sans-serif",outline:'none'}}><option value="">All</option>{batches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select>}>{filtered.map(c=>(<div key={c.id} className="ch" style={{display:'flex',alignItems:'center',gap:16,...getGlassLight(dark),borderRadius:14,padding:20,marginBottom:12}}><div style={{width:54,height:54,background:c.recording_url?'rgba(16,185,129,.08)':'rgba(255,215,0,.04)',borderRadius:14,display:'flex',alignItems:'center',justifyContent:'center',fontSize:24,flexShrink:0}}>{c.recording_url?'▶️':'📅'}</div><div style={{flex:1}}><div style={{fontSize:15,fontWeight:700,color:dark?'#E5E7EB':'#1F2937'}}>C{c.class_number} — {c.title}</div><div style={{fontSize:12,color:'#6B7280'}}>{batches.find(b=>b.id===c.batch_id)?.name||'—'} · {fmtDate(c.date)}</div></div><div style={{display:'flex',gap:8}}>{c.recording_url&&<a href={c.recording_url} target="_blank" rel="noreferrer" style={{background:G,color:'#000',padding:'8px 16px',borderRadius:10,fontSize:12,fontWeight:700,textDecoration:'none'}}>▶</a>}<Btn type="outline" size="sm" onClick={()=>{setForm({id:c.id,class_number:c.class_number,recording_url:c.recording_url||'',notes:c.notes||''});setModal('edit')}}>{c.recording_url?'✏️':'➕'}</Btn></div></div>))}{filtered.length===0&&<Empty icon="🎥" title="No classes"/>}</Card><Modal open={modal==='edit'} onClose={()=>setModal(null)} title="Recording" icon="🎥" footer={<><Btn type="ghost" onClick={()=>setModal(null)}>Cancel</Btn><Btn onClick={save}>💾 Save</Btn></>}><Inp label="URL" value={form.recording_url||''} onChange={e=>setForm({...form,recording_url:e.target.value})}/><div style={{display:'flex',alignItems:'center',gap:12,margin:'4px 0 22px'}}><div style={{flex:1,height:1,background:'rgba(255,255,255,.05)'}}/><span style={{fontSize:11,color:'#4B5563',fontWeight:700}}>OR UPLOAD</span><div style={{flex:1,height:1,background:'rgba(255,255,255,.05)'}}/></div><FileUp label="Video" accept="video/*,.mp4,.mov" uploading={uploading} onUpload={handleFile}/><TA label="Notes" value={form.notes||''} onChange={e=>setForm({...form,notes:e.target.value})}/></Modal></>)}
+function RecordingsPage(){const[classes,setClasses]=useState([]);const[batches,setBatches]=useState([]);const[loading,setLoading]=useState(true);const[modal,setModal]=useState(null);const[form,setForm]=useState({});const[uploading,setUploading]=useState(false);const[filterBatch,setFilterBatch]=useState('');const{dark}=useTheme();const load=useCallback(async()=>{setLoading(true);const[c,b]=await Promise.all([sb.from('classes').select('*').order('class_number'),sb.from('batches').select('*')]);setClasses(c.data||[]);setBatches(b.data||[]);setLoading(false)},[]);useEffect(()=>{load()},[load]);const handleFile=async e=>{const file=e.target.files[0];if(!file)return;setUploading(true);try{const ext=file.name.split('.').pop();const url=await uploadFile(file,'recordings',`recordings/c${form.class_number||'x'}-${Date.now()}.${ext}`);setForm(f=>({...f,recording_url:url}));toast.success('Uploaded!')}catch{toast.error('Failed')}finally{setUploading(false);e.target.value=''}};const save=async()=>{if(!form.recording_url){toast.error('Add URL');return};await sb.from('classes').update({recording_url:form.recording_url,notes:form.notes,status:'completed'}).eq('id',form.id);toast.success('Saved!');setModal(null);load()};const filtered=filterBatch?classes.filter(c=>c.batch_id===filterBatch):classes;if(loading)return <SkeletonDashboard/>;return(<><Card title={`Recordings (${classes.filter(c=>c.recording_url).length}/${classes.length})`} icon="🎥" action={<select value={filterBatch} onChange={e=>setFilterBatch(e.target.value)} style={{background:'#0A0A0B',border:'1px solid rgba(255,255,255,.06)',color:'#E5E7EB',padding:'9px 14px',borderRadius:11,fontSize:12,fontFamily:"'Inter',sans-serif",outline:'none'}}><option value="">All</option>{batches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select>}>{filtered.map(c=>(<div key={c.id} className="ch" style={{display:'flex',alignItems:'center',gap:16,...getGlassLight(dark),borderRadius:14,padding:20,marginBottom:12}}><div style={{width:54,height:54,background:c.recording_url?'rgba(16,185,129,.08)':'rgba(255,215,0,.04)',borderRadius:14,display:'flex',alignItems:'center',justifyContent:'center',fontSize:24,flexShrink:0}}>{c.recording_url?'▶️':'📅'}</div><div style={{flex:1}}><div style={{fontSize:15,fontWeight:700,color:dark?'#E5E7EB':'#1F2937'}}>C{c.class_number} — {c.title}</div><div style={{fontSize:12,color:'#6B7280'}}>{batches.find(b=>b.id===c.batch_id)?.name||'—'} · {fmtDate(c.date)}</div></div><div style={{display:'flex',gap:8}}>{c.recording_url&&<a href={c.recording_url} target="_blank" rel="noreferrer" style={{background:G,color:'#000',padding:'8px 16px',borderRadius:10,fontSize:12,fontWeight:700,textDecoration:'none'}}>▶</a>}<Btn type="outline" size="sm" onClick={()=>{setForm({id:c.id,class_number:c.class_number,recording_url:c.recording_url||'',notes:c.notes||''});setModal('edit')}}>{c.recording_url?'✏️':'➕'}</Btn></div></div>))}{filtered.length===0&&<Empty icon="🎥" title="No classes"/>}</Card><Modal open={modal==='edit'} onClose={()=>setModal(null)} title="Recording" icon="🎥" footer={<><Btn type="ghost" onClick={()=>setModal(null)}>Cancel</Btn><Btn onClick={save}>💾 Save</Btn></>}><Inp label="URL" value={form.recording_url||''} onChange={e=>setForm({...form,recording_url:e.target.value})}/><div style={{display:'flex',alignItems:'center',gap:12,margin:'4px 0 22px'}}><div style={{flex:1,height:1,background:'rgba(255,255,255,.05)'}}/><span style={{fontSize:11,color:'#4B5563',fontWeight:700}}>OR UPLOAD</span><div style={{flex:1,height:1,background:'rgba(255,255,255,.05)'}}/></div><FileUp label="Video" accept="video/*,.mp4,.mov" uploading={uploading} onUpload={handleFile}/><TA label="Notes" value={form.notes||''} onChange={e=>setForm({...form,notes:e.target.value})}/></Modal></>)}
 
-function AnnouncementsPage(){const[anns,setAnns]=useState([]);const[loading,setLoading]=useState(true);const[modal,setModal]=useState(false);const[form,setForm]=useState({});const{dark}=useTheme();const load=useCallback(async()=>{setLoading(true);const{data}=await sb.from('announcements').select('*').order('created_at',{ascending:false});setAnns(data||[]);setLoading(false)},[]);useEffect(()=>{load()},[load]);const save=async()=>{if(!form.title||!form.content){toast.error('Required');return};if(form.id){await sb.from('announcements').update(form).eq('id',form.id)}else{await sb.from('announcements').insert({...form,priority:form.priority||'normal'})};toast.success('Posted! 📢');setModal(false);load()};const del=async id=>{await sb.from('announcements').delete().eq('id',id);toast.success('Deleted');load()};if(loading)return <Loader/>;return(<><Card title={`Announcements (${anns.length})`} icon="📢" action={<Btn onClick={()=>{setForm({priority:'normal'});setModal(true)}} icon="➕">New</Btn>}>{anns.length===0?<Empty icon="📢" title="No announcements"/>:anns.map((a,i)=>(<div key={a.id} style={{...getGlassLight(dark),borderRadius:14,padding:22,marginBottom:14,borderLeft:'3px solid #FFD700',animation:`fadeIn .4s ease ${i*.08}s both`}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:10}}><div style={{fontSize:16,fontWeight:700,color:dark?'#E5E7EB':'#1F2937'}}>{a.title}</div><div style={{display:'flex',gap:8}}><Bdg type={a.priority==='urgent'?'danger':a.priority==='important'?'warning':'info'}>{a.priority}</Bdg><Btn type="outline" size="xs" onClick={()=>{setForm(a);setModal(true)}}>✏️</Btn><Btn type="danger" size="xs" onClick={()=>del(a.id)}>🗑</Btn></div></div><div style={{fontSize:13,color:'#9CA3AF',lineHeight:1.7}}>{a.content}</div><div style={{fontSize:11,color:'#374151',marginTop:8}}>{ago(a.created_at)}</div></div>))}</Card><Modal open={modal} onClose={()=>setModal(false)} title={form.id?'Edit':'New'} icon="📢" footer={<><Btn type="ghost" onClick={()=>setModal(false)}>Cancel</Btn><Btn onClick={save}>📢 Post</Btn></>}><Inp label="Title" required value={form.title||''} onChange={e=>setForm({...form,title:e.target.value})}/><TA label="Content" required value={form.content||''} onChange={e=>setForm({...form,content:e.target.value})} style={{minHeight:130}}/><Sel label="Priority" value={form.priority||'normal'} onChange={e=>setForm({...form,priority:e.target.value})}><option value="normal">Normal</option><option value="important">Important</option><option value="urgent">Urgent</option></Sel></Modal></>)}
+function AnnouncementsPage(){const[anns,setAnns]=useState([]);const[loading,setLoading]=useState(true);const[modal,setModal]=useState(false);const[form,setForm]=useState({});const{dark}=useTheme();const load=useCallback(async()=>{setLoading(true);const{data}=await sb.from('announcements').select('*').order('created_at',{ascending:false});setAnns(data||[]);setLoading(false)},[]);useEffect(()=>{load()},[load]);const save=async()=>{if(!form.title||!form.content){toast.error('Required');return};if(form.id){await sb.from('announcements').update(form).eq('id',form.id)}else{await sb.from('announcements').insert({...form,priority:form.priority||'normal'})};toast.success('Posted! 📢');setModal(false);load()};const del=async id=>{await sb.from('announcements').delete().eq('id',id);toast.success('Deleted');load()};if(loading)return <SkeletonDashboard/>;return(<><Card title={`Announcements (${anns.length})`} icon="📢" action={<Btn onClick={()=>{setForm({priority:'normal'});setModal(true)}} icon="➕">New</Btn>}>{anns.length===0?<Empty icon="📢" title="No announcements"/>:anns.map((a,i)=>(<div key={a.id} style={{...getGlassLight(dark),borderRadius:14,padding:22,marginBottom:14,borderLeft:'3px solid #FFD700',animation:`fadeIn .4s ease ${i*.08}s both`}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:10}}><div style={{fontSize:16,fontWeight:700,color:dark?'#E5E7EB':'#1F2937'}}>{a.title}</div><div style={{display:'flex',gap:8}}><Bdg type={a.priority==='urgent'?'danger':a.priority==='important'?'warning':'info'}>{a.priority}</Bdg><Btn type="outline" size="xs" onClick={()=>{setForm(a);setModal(true)}}>✏️</Btn><Btn type="danger" size="xs" onClick={()=>del(a.id)}>🗑</Btn></div></div><div style={{fontSize:13,color:'#9CA3AF',lineHeight:1.7}}>{a.content}</div><div style={{fontSize:11,color:'#374151',marginTop:8}}>{ago(a.created_at)}</div></div>))}</Card><Modal open={modal} onClose={()=>setModal(false)} title={form.id?'Edit':'New'} icon="📢" footer={<><Btn type="ghost" onClick={()=>setModal(false)}>Cancel</Btn><Btn onClick={save}>📢 Post</Btn></>}><Inp label="Title" required value={form.title||''} onChange={e=>setForm({...form,title:e.target.value})}/><TA label="Content" required value={form.content||''} onChange={e=>setForm({...form,content:e.target.value})} style={{minHeight:130}}/><Sel label="Priority" value={form.priority||'normal'} onChange={e=>setForm({...form,priority:e.target.value})}><option value="normal">Normal</option><option value="important">Important</option><option value="urgent">Urgent</option></Sel></Modal></>)}
 
-function CertificatesPage(){const[students,setStudents]=useState([]);const[loading,setLoading]=useState(true);const[search,setSearch]=useState('');const{dark}=useTheme();useEffect(()=>{sb.from('students').select('*').order('full_name').then(r=>{setStudents(r.data||[]);setLoading(false)})},[]);const gen=s=>{const d=new Date().toLocaleDateString('en-PK',{day:'2-digit',month:'long',year:'numeric'});const w=window.open('','_blank');w.document.write(`<!DOCTYPE html><html><head><title>Certificate</title><style>@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap');*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Poppins',sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f9f9f9}.cert{width:800px;border:10px solid #FFD700;padding:50px;text-align:center;background:#fff}.inner{border:2px solid #FFD700;padding:40px}@media print{body{background:#fff}}</style></head><body><div class="cert"><div class="inner"><div style="font-size:11px;letter-spacing:5px;color:#888;text-transform:uppercase;margin-bottom:14px">AEMTECH INSTITUTE</div><div style="font-size:34px;font-weight:800;color:#FFD700;margin-bottom:8px">Certificate of Completion</div><div style="color:#666;margin-bottom:20px">This is to certify that</div><div style="font-size:32px;font-weight:800;border-bottom:2px solid #FFD700;padding-bottom:10px;display:inline-block;margin-bottom:10px">${s.full_name}</div>${s.father_name?'<div style="font-size:14px;color:#888;margin-bottom:10px">S/O '+s.father_name+'</div>':''}<div style="font-size:17px;font-weight:700;margin-bottom:4px">Digital Business & AI Master Program</div><div style="color:#888;margin-bottom:30px;font-size:13px">Learn · Design · Build · Market · Earn</div><div style="display:flex;justify-content:space-between;padding-top:16px;border-top:1px solid #eee"><div><div style="font-size:10px;color:#888">DATE</div><div style="font-weight:700">${d}</div></div><div style="font-size:40px">🎓</div><div style="text-align:right"><div style="font-size:10px;color:#888">DIRECTOR</div><div style="font-weight:700">AEMTECH Institute</div></div></div></div></div><script>window.onload=()=>window.print()<\/script></body></html>`);w.document.close()};const filtered=students.filter(s=>!search||s.full_name?.toLowerCase().includes(search.toLowerCase()));if(loading)return <Loader/>;return <Card title="🎓 Certificates" icon="🎓" action={<Search value={search} onChange={e=>setSearch(e.target.value)}/>}><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(165px,1fr))',gap:16}}>{filtered.map(s=>(<div key={s.id} className="ch" style={{...getGlassLight(dark),borderRadius:16,padding:22,textAlign:'center'}}><Av name={s.full_name} size={54} glow/><div style={{fontSize:14,fontWeight:700,marginTop:14,marginBottom:4,color:dark?'#E5E7EB':'#1F2937'}}>{s.full_name}</div><div style={{fontSize:11,color:'#4B5563',marginBottom:10}}>{s.city||'Pakistan'}</div><Bdg type={statusBadge(s.status)} dot>{s.status}</Bdg><div style={{marginTop:14}}><Btn onClick={()=>gen(s)} size="sm" full>🎓 Generate</Btn></div></div>))}{filtered.length===0&&<Empty icon="🎓" title="No students"/>}</div></Card>}
+function CertificatesPage(){const[students,setStudents]=useState([]);const[loading,setLoading]=useState(true);const[search,setSearch]=useState('');const{dark}=useTheme();useEffect(()=>{sb.from('students').select('*').order('full_name').then(r=>{setStudents(r.data||[]);setLoading(false)})},[]);const gen=s=>{const d=new Date().toLocaleDateString('en-PK',{day:'2-digit',month:'long',year:'numeric'});const w=window.open('','_blank');w.document.write(`<!DOCTYPE html><html><head><title>Certificate</title><style>@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap');*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Poppins',sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f9f9f9}.cert{width:800px;border:10px solid #FFD700;padding:50px;text-align:center;background:#fff}.inner{border:2px solid #FFD700;padding:40px}@media print{body{background:#fff}}</style></head><body><div class="cert"><div class="inner"><div style="font-size:11px;letter-spacing:5px;color:#888;text-transform:uppercase;margin-bottom:14px">AEMTECH INSTITUTE</div><div style="font-size:34px;font-weight:800;color:#FFD700;margin-bottom:8px">Certificate of Completion</div><div style="color:#666;margin-bottom:20px">This is to certify that</div><div style="font-size:32px;font-weight:800;border-bottom:2px solid #FFD700;padding-bottom:10px;display:inline-block;margin-bottom:10px">${s.full_name}</div>${s.father_name?'<div style="font-size:14px;color:#888;margin-bottom:10px">S/O '+s.father_name+'</div>':''}<div style="font-size:17px;font-weight:700;margin-bottom:4px">Digital Business & AI Master Program</div><div style="color:#888;margin-bottom:30px;font-size:13px">Learn · Design · Build · Market · Earn</div><div style="display:flex;justify-content:space-between;padding-top:16px;border-top:1px solid #eee"><div><div style="font-size:10px;color:#888">DATE</div><div style="font-weight:700">${d}</div></div><div style="font-size:40px">🎓</div><div style="text-align:right"><div style="font-size:10px;color:#888">DIRECTOR</div><div style="font-weight:700">AEMTECH Institute</div></div></div></div></div><script>window.onload=()=>window.print()<\/script></body></html>`);w.document.close()};const filtered=students.filter(s=>!search||s.full_name?.toLowerCase().includes(search.toLowerCase()));if(loading)return <SkeletonDashboard/>;return <Card title="🎓 Certificates" icon="🎓" action={<Search value={search} onChange={e=>setSearch(e.target.value)}/>}><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(165px,1fr))',gap:16}}>{filtered.map(s=>(<div key={s.id} className="ch" style={{...getGlassLight(dark),borderRadius:16,padding:22,textAlign:'center'}}><Av name={s.full_name} size={54} glow/><div style={{fontSize:14,fontWeight:700,marginTop:14,marginBottom:4,color:dark?'#E5E7EB':'#1F2937'}}>{s.full_name}</div><div style={{fontSize:11,color:'#4B5563',marginBottom:10}}>{s.city||'Pakistan'}</div><Bdg type={statusBadge(s.status)} dot>{s.status}</Bdg><div style={{marginTop:14}}><Btn onClick={()=>gen(s)} size="sm" full>🎓 Generate</Btn></div></div>))}{filtered.length===0&&<Empty icon="🎓" title="No students"/>}</div></Card>}
 
 function SheetSyncPage(){const[syncing,setSyncing]=useState({});const[lastSync,setLastSync]=useState(null);const{dark}=useTheme();const syncData=async type=>{setSyncing(p=>({...p,[type]:true}));try{if(type==='students'){const{data}=await sb.from('students').select('*');await syncToSheet('syncStudents',{students:data||[]});toast.success('Students synced!')};if(type==='attendance'){const[a,s,c]=await Promise.all([sb.from('attendance').select('*'),sb.from('students').select('*'),sb.from('classes').select('*')]);await syncToSheet('syncAttendance',{records:(a.data||[]).map(x=>({student_name:s.data?.find(st=>st.id===x.student_id)?.full_name||'',class_number:c.data?.find(cl=>cl.id===x.class_id)?.class_number||'',class_title:c.data?.find(cl=>cl.id===x.class_id)?.title||'',date:fmtDate(x.marked_at||new Date()),status:x.status}))});toast.success('Attendance synced!')};if(type==='fees'){const{data}=await sb.from('students').select('*');await syncToSheet('syncFees',{students:data||[]});toast.success('Fees synced!')};if(type==='submissions'){const[s,st,a]=await Promise.all([sb.from('submissions').select('*'),sb.from('students').select('*'),sb.from('assignments').select('*')]);await syncToSheet('syncSubmissions',{records:(s.data||[]).map(x=>({student_name:st.data?.find(s=>s.id===x.student_id)?.full_name||'',assignment_title:a.data?.find(a=>a.id===x.assignment_id)?.title||'',submitted_at:x.submitted_at,submission_link:x.submission_link||'',marks_obtained:x.marks_obtained||'',feedback:x.feedback||'',status:x.status}))});toast.success('Submissions synced!')};if(type==='assignments'){const[a,b]=await Promise.all([sb.from('assignments').select('*'),sb.from('batches').select('*')]);await syncToSheet('syncAssignments',{records:(a.data||[]).map(x=>({title:x.title,batch_name:b.data?.find(bt=>bt.id===x.batch_id)?.name||'',due_date:x.due_date,total_marks:x.total_marks,description:x.description||''}))});toast.success('Assignments synced!')};setLastSync(new Date())}catch{toast.error('Failed')}finally{setSyncing(p=>({...p,[type]:false}))}};const syncAll=async()=>{setSyncing({all:true});toast.loading('Syncing...',{id:'all'});try{for(const t of['students','attendance','fees','submissions','assignments'])await syncData(t);setLastSync(new Date());toast.success('Done! 🎉',{id:'all'})}finally{setSyncing({})}};const sheets=[{type:'students',icon:'👥',label:'Students',color:'#10B981'},{type:'attendance',icon:'✅',label:'Attendance',color:'#3B82F6'},{type:'fees',icon:'💰',label:'Fees',color:'#FFD700'},{type:'submissions',icon:'📤',label:'Submissions',color:'#F59E0B'},{type:'assignments',icon:'📝',label:'Assignments',color:'#8B5CF6'}];return(<div><div style={{...getGlass(dark),borderRadius:20,padding:'30px 34px',marginBottom:26,background:dark?'linear-gradient(135deg,rgba(16,185,129,.05),rgba(16,185,129,.015))':'linear-gradient(135deg,rgba(16,185,129,.08),rgba(16,185,129,.03))',animation:'fadeIn .5s ease'}}><div style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:16}}><div><div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:22,fontWeight:800,color:dark?'#E5E7EB':'#1F2937'}}>📊 Sheet Sync</div>{lastSync&&<div style={{fontSize:11,color:'#10B981',marginTop:6}}>✅ Last: {lastSync.toLocaleString()}</div>}</div><div style={{display:'flex',gap:10}}><Btn onClick={syncAll} loading={syncing.all} icon="🔄" style={{background:G2,color:'#fff',border:'none'}}>Sync All</Btn><Btn type="outline" onClick={()=>openSheet()} icon="📊">Open</Btn></div></div></div><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(260px,1fr))',gap:18}}>{sheets.map(({type,icon,label,color})=>(<div key={type} className="ch" style={{...getGlass(dark),borderRadius:18,padding:26,borderTop:`3px solid ${color}`}}><div style={{display:'flex',alignItems:'center',gap:14,marginBottom:18}}><div style={{width:54,height:54,background:`${color}12`,borderRadius:15,display:'flex',alignItems:'center',justifyContent:'center',fontSize:24}}>{icon}</div><div style={{fontSize:17,fontWeight:700,color:dark?'#E5E7EB':'#1F2937'}}>{label}</div></div><div style={{display:'flex',gap:8}}><Btn full loading={syncing[type]} onClick={()=>syncData(type)} style={{background:`${color}15`,color,border:`1px solid ${color}30`,flex:2}} icon="🔄">Sync</Btn><Btn type="ghost" size="sm" onClick={()=>openSheet(type)} icon="↗">View</Btn></div></div>))}</div></div>)}
 
@@ -1942,7 +2132,7 @@ function SettingsPage(){
         
         <Card title="ℹ️ Info" icon="ℹ️" style={{marginTop:22}}>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
-            {[['Version','v3.2'],['Platform','Next.js'],['Database','Supabase'],['Status','✅ Live'],['Sheets','✅ Connected'],['Theme',dark?'🌙 Dark':'☀️ Light']].map(([k,v])=>(
+            {[['Version','v4.0'],['Platform','Next.js'],['Database','Supabase'],['Status','✅ Live'],['Sheets','✅ Connected'],['Theme',dark?'🌙 Dark':'☀️ Light']].map(([k,v])=>(
               <div key={k} style={{...getGlassLight(dark),borderRadius:12,padding:16}}>
                 <div style={{fontSize:10,color:'#6B7280',textTransform:'uppercase',letterSpacing:1.2,marginBottom:5}}>{k}</div>
                 <div style={{fontWeight:600,fontSize:13,color:dark?'#E5E7EB':'#1F2937'}}>{v}</div>
@@ -2109,7 +2299,7 @@ function StudentAttendancePage() {
   const { user } = useAuth(); const { dark } = useTheme()
   const [classes, setClasses] = useState([]); const [attMap, setAttMap] = useState({}); const [loading, setLoading] = useState(true)
   useEffect(() => { if (!user) return; (async () => { const [c, a] = await Promise.all([sb.from('classes').select('*').eq('batch_id', user.batch_id || '').order('class_number'), sb.from('attendance').select('*').eq('student_id', user.id)]); const map = {}; (a.data || []).forEach(x => map[x.class_id] = x.status); setClasses(c.data || []); setAttMap(map); setLoading(false) })() }, [user])
-  if (loading) return <Loader />
+  if (loading) return <SkeletonDashboard />
   const present = Object.values(attMap).filter(v => v === 'present').length; const total = classes.length; const pct = total > 0 ? Math.round((present / total) * 100) : 0
   return (
     <div>
@@ -2153,7 +2343,7 @@ function StudentAssignmentsPage() {
   useEffect(() => { load() }, [load])
   const handleFile = async e => { const file = e.target.files[0]; if (!file) return; setUploading(true); try { const ext = file.name.split('.').pop(); const url = await uploadFile(file, 'recordings', `submissions/${user.id}-${Date.now()}.${ext}`); setForm(f => ({ ...f, link: url })); toast.success('Uploaded!') } catch { toast.error('Failed') } finally { setUploading(false); e.target.value = '' } }
   const submit = async () => { if (!form.link && !form.text) { toast.error('Add link or note'); return }; await sb.from('submissions').insert({ assignment_id: form.id, student_id: user.id, submission_link: form.link, submission_text: form.text, status: 'submitted' }); toast.success('Submitted! 🎉'); setModal(null); load() }
-  if (loading) return <Loader />
+  if (loading) return <SkeletonDashboard />
   return (
     <>
       <Card title={`My Assignments (${assignments.length})`} icon="📝">
@@ -2205,7 +2395,7 @@ function StudentRecordingsPage() {
   const { user } = useAuth(); const { dark } = useTheme()
   const [classes, setClasses] = useState([]); const [loading, setLoading] = useState(true)
   useEffect(() => { if (!user) return; sb.from('classes').select('*').eq('batch_id', user.batch_id || '').order('class_number').then(r => { setClasses(r.data || []); setLoading(false) }) }, [user])
-  if (loading) return <Loader />
+  if (loading) return <SkeletonDashboard />
   const available = classes.filter(c => c.recording_url).length
   return (
     <div>
@@ -2236,7 +2426,7 @@ function StudentRecordingsPage() {
 function StudentAnnouncementsPage() {
   const [anns, setAnns] = useState([]); const [loading, setLoading] = useState(true); const { dark } = useTheme()
   useEffect(() => { sb.from('announcements').select('*').order('created_at', { ascending: false }).then(r => { setAnns(r.data || []); setLoading(false) }) }, [])
-  if (loading) return <Loader />
+  if (loading) return <SkeletonDashboard />
   return <Card title={`Announcements (${anns.length})`} icon="📢">{anns.length === 0 ? <Empty icon="📢" title="No announcements" /> : anns.map((a, i) => (<div key={a.id} style={{ ...getGlassLight(dark), borderRadius: 14, padding: 22, marginBottom: 14, borderLeft: '3px solid #FFD700', animation: `fadeIn .4s ease ${i * .08}s both` }}><div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}><div style={{ fontSize: 17, fontWeight: 700, color: dark ? '#E5E7EB' : '#1F2937' }}>{a.title}</div><Bdg type={a.priority === 'urgent' ? 'danger' : a.priority === 'important' ? 'warning' : 'info'}>{a.priority}</Bdg></div><div style={{ fontSize: 13, color: '#9CA3AF', lineHeight: 1.75 }}>{a.content}</div><div style={{ fontSize: 11, color: '#374151', marginTop: 10 }}>{ago(a.created_at)}</div></div>))}</Card>
 }
 
@@ -2674,7 +2864,7 @@ function LeaderboardPage() {
     })()
   }, [])
 
-  if (loading) return <Loader />
+  if (loading) return <SkeletonDashboard />
 
   const ranked = students.map(s => {
     const myAtt = attendance.filter(a => a.student_id === s.id)
@@ -2744,7 +2934,741 @@ function LeaderboardPage() {
   )
 }
 
-const pageTitles = { dashboard: '📊 Dashboard', students: '👥 Students', admissions: '📋 Admissions', batches: '🏫 Batches', classes: '📅 Classes', attendance: '✅ Attendance', assignments: '📝 Assignments', submissions: '📤 Submissions', recordings: '🎥 Recordings', fees: '💰 Fee Management', announcements: '📢 Announcements', certificates: '🎓 Certificates', leaderboard: '🏆 Leaderboard', sync: '🔄 Sheet Sync', excel: '📈 Import/Export', settings: '⚙️ Settings', certificate: '🎓 My Certificate', profile: '👤 My Profile' }
+// ═══════════════════════════════════════
+// TIMETABLE — Visual Weekly Schedule
+// ═══════════════════════════════════════
+function TimetablePage() {
+  const { dark } = useTheme()
+  const [batches, setBatches] = useState([]); const [selBatch, setSelBatch] = useState('')
+  const [schedule, setSchedule] = useState({}); const [loading, setLoading] = useState(true)
+  const [modal, setModal] = useState(false); const [form, setForm] = useState({})
+
+  useEffect(() => { sb.from('batches').select('*').then(r => { setBatches(r.data || []); setLoading(false) }) }, [])
+
+  const loadSchedule = async (bid) => {
+    setSelBatch(bid)
+    if (!bid) { setSchedule({}); return }
+    const { data } = await sb.from('timetable').select('*').eq('batch_id', bid)
+    const map = {}
+    ;(data || []).forEach(s => { if (!map[s.day]) map[s.day] = []; map[s.day].push(s) })
+    setSchedule(map)
+  }
+
+  const save = async () => {
+    if (!form.day || !form.time || !form.subject || !selBatch) { toast.error('Fill all fields'); return }
+    if (form.id) {
+      await sb.from('timetable').update({ day: form.day, time: form.time, subject: form.subject, instructor: form.instructor || '', notes: form.notes || '' }).eq('id', form.id)
+    } else {
+      await sb.from('timetable').insert({ batch_id: selBatch, day: form.day, time: form.time, subject: form.subject, instructor: form.instructor || '', notes: form.notes || '' })
+    }
+    toast.success('Saved! 🗓'); setModal(false); loadSchedule(selBatch)
+  }
+
+  const del = async (id) => {
+    await sb.from('timetable').delete().eq('id', id)
+    toast.success('Deleted'); loadSchedule(selBatch)
+  }
+
+  const timeSlots = HOURS
+  const colors = ['#FFD700', '#10B981', '#3B82F6', '#F59E0B', '#8B5CF6', '#EC4899', '#EF4444']
+
+  if (loading) return <SkeletonDashboard />
+
+  return (
+    <div className="page-enter">
+      <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap', alignItems: 'center' }}>
+        <Sel label="" value={selBatch} onChange={e => loadSchedule(e.target.value)} style={{ minWidth: 200 }}>
+          <option value="">Select Batch</option>
+          {batches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+        </Sel>
+        {selBatch && <Btn onClick={() => { setForm({ day: 'Monday' }); setModal(true) }} icon="➕" size="sm">Add Slot</Btn>}
+      </div>
+
+      {selBatch ? (
+        <div style={{ overflowX: 'auto' }} className="cs">
+          <div style={{ display: 'grid', gridTemplateColumns: `80px repeat(${DAY_SHORT.length}, 1fr)`, gap: 2, minWidth: 800 }}>
+            {/* Header */}
+            <div style={{ padding: 14, fontWeight: 700, fontSize: 11, color: '#6B7280', textAlign: 'center' }}></div>
+            {DAY_SHORT.map(d => (
+              <div key={d} style={{ padding: '14px 8px', textAlign: 'center', fontWeight: 800, fontSize: 12, color: '#FFD700', ...getGlassLight(dark), borderRadius: 12, letterSpacing: 1 }}>{d}</div>
+            ))}
+
+            {/* Time rows */}
+            {timeSlots.map((time, ti) => (
+              <React.Fragment key={time}>
+                <div style={{ padding: '10px 8px', fontSize: 10, color: '#4B5563', textAlign: 'center', fontWeight: 600 }}>{time}</div>
+                {DAYS.map((day, di) => {
+                  const slots = (schedule[day] || []).filter(s => s.time === time)
+                  return (
+                    <div key={day + time} style={{ padding: 4, minHeight: 54, ...getGlassLight(dark), borderRadius: 10, margin: 1, position: 'relative' }}>
+                      {slots.map((s, si) => (
+                        <div key={s.id} onClick={() => { setForm(s); setModal(true) }} style={{
+                          background: `${colors[(di + si) % colors.length]}15`,
+                          border: `1px solid ${colors[(di + si) % colors.length]}30`,
+                          borderRadius: 8, padding: '6px 8px', cursor: 'pointer', marginBottom: 2,
+                          borderLeft: `3px solid ${colors[(di + si) % colors.length]}`,
+                        }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: dark ? '#E5E7EB' : '#1F2937' }}>{s.subject}</div>
+                          {s.instructor && <div style={{ fontSize: 9, color: '#6B7280' }}>{s.instructor}</div>}
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })}
+              </React.Fragment>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <Empty icon="🗓" title="Select a batch" sub="Choose a batch to view or edit its timetable" />
+      )}
+
+      <Modal open={modal} onClose={() => setModal(false)} title={form.id ? 'Edit Slot' : 'Add Time Slot'} icon="🗓" footer={
+        <div style={{ display: 'flex', gap: 10, width: '100%' }}>
+          {form.id && <Btn type="danger" size="sm" onClick={() => { del(form.id); setModal(false) }}>🗑 Delete</Btn>}
+          <div style={{ flex: 1 }} />
+          <Btn type="ghost" onClick={() => setModal(false)}>Cancel</Btn>
+          <Btn onClick={save}>💾 Save</Btn>
+        </div>
+      }>
+        <Grid>
+          <Sel label="Day" required value={form.day || ''} onChange={e => setForm({ ...form, day: e.target.value })}>
+            <option value="">Select</option>
+            {DAYS.map(d => <option key={d} value={d}>{d}</option>)}
+          </Sel>
+          <Sel label="Time" required value={form.time || ''} onChange={e => setForm({ ...form, time: e.target.value })}>
+            <option value="">Select</option>
+            {HOURS.map(h => <option key={h} value={h}>{h}</option>)}
+          </Sel>
+        </Grid>
+        <Inp label="Subject" required value={form.subject || ''} onChange={e => setForm({ ...form, subject: e.target.value })} placeholder="e.g., Canva Design" />
+        <Inp label="Instructor" value={form.instructor || ''} onChange={e => setForm({ ...form, instructor: e.target.value })} placeholder="Teacher name" />
+        <TA label="Notes" value={form.notes || ''} onChange={e => setForm({ ...form, notes: e.target.value })} />
+      </Modal>
+    </div>
+  )
+}
+
+// Student Timetable View
+function StudentTimetablePage() {
+  const { user } = useAuth(); const { dark } = useTheme()
+  const [schedule, setSchedule] = useState({}); const [loading, setLoading] = useState(true)
+  const colors = ['#FFD700', '#10B981', '#3B82F6', '#F59E0B', '#8B5CF6', '#EC4899']
+
+  useEffect(() => {
+    if (!user?.batch_id) { setLoading(false); return }
+    sb.from('timetable').select('*').eq('batch_id', user.batch_id).then(r => {
+      const map = {}; (r.data || []).forEach(s => { if (!map[s.day]) map[s.day] = []; map[s.day].push(s) })
+      setSchedule(map); setLoading(false)
+    })
+  }, [user])
+
+  if (loading) return <SkeletonDashboard />
+  const today = DAYS[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1]
+
+  return (
+    <Card title="🗓 My Weekly Schedule" icon="🗓">
+      {DAYS.map((day, di) => {
+        const slots = schedule[day] || []
+        if (slots.length === 0) return null
+        return (
+          <div key={day} style={{ marginBottom: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <div style={{ fontSize: 14, fontWeight: 800, color: day === today ? '#FFD700' : (dark ? '#E5E7EB' : '#1F2937') }}>{day}</div>
+              {day === today && <Bdg type="gold" size="sm" dot>Today</Bdg>}
+            </div>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              {slots.sort((a, b) => a.time?.localeCompare(b.time)).map((s, si) => (
+                <div key={s.id} style={{
+                  ...getGlassLight(dark), borderRadius: 14, padding: '16px 20px', flex: '1 1 200px', maxWidth: 300,
+                  borderLeft: `4px solid ${colors[(di + si) % colors.length]}`,
+                }}>
+                  <div style={{ fontSize: 11, color: colors[(di + si) % colors.length], fontWeight: 700, marginBottom: 4 }}>{s.time}</div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: dark ? '#E5E7EB' : '#1F2937' }}>{s.subject}</div>
+                  {s.instructor && <div style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>👨‍🏫 {s.instructor}</div>}
+                  {s.notes && <div style={{ fontSize: 11, color: '#4B5563', marginTop: 6 }}>{s.notes}</div>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })}
+      {Object.keys(schedule).length === 0 && <Empty icon="🗓" title="No schedule set" sub="Admin hasn't set a timetable for your batch yet" />}
+    </Card>
+  )
+}
+
+// ═══════════════════════════════════════
+// QUIZ/EXAM SYSTEM
+// ═══════════════════════════════════════
+function QuizAdminPage() {
+  const { dark } = useTheme()
+  const [quizzes, setQuizzes] = useState([]); const [batches, setBatches] = useState([]); const [loading, setLoading] = useState(true)
+  const [modal, setModal] = useState(false); const [form, setForm] = useState({}); const [questions, setQuestions] = useState([])
+  const [viewQuiz, setViewQuiz] = useState(null); const [results, setResults] = useState([])
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    const [q, b] = await Promise.all([sb.from('quizzes').select('*').order('created_at', { ascending: false }), sb.from('batches').select('*')])
+    setQuizzes(q.data || []); setBatches(b.data || []); setLoading(false)
+  }, [])
+  useEffect(() => { load() }, [load])
+
+  const addQuestion = () => setQuestions([...questions, { question: '', options: ['', '', '', ''], correct: 0 }])
+  const updateQ = (i, field, val) => { const q = [...questions]; if (field === 'question') q[i].question = val; else if (field === 'correct') q[i].correct = parseInt(val); else { q[i].options[parseInt(field)] = val }; setQuestions(q) }
+  const removeQ = (i) => setQuestions(questions.filter((_, idx) => idx !== i))
+
+  const save = async () => {
+    if (!form.title || !form.batch_id) { toast.error('Title and batch required'); return }
+    if (questions.length === 0) { toast.error('Add at least 1 question'); return }
+    const valid = questions.every(q => q.question && q.options.every(o => o))
+    if (!valid) { toast.error('Fill all questions and options'); return }
+    const quiz = { title: form.title, batch_id: form.batch_id, description: form.description || '', duration_minutes: parseInt(form.duration_minutes) || 30, questions: JSON.stringify(questions), status: form.status || 'draft', total_marks: questions.length }
+    if (form.id) { await sb.from('quizzes').update(quiz).eq('id', form.id) }
+    else { await sb.from('quizzes').insert(quiz) }
+    toast.success('Quiz saved! 🧠'); setModal(false); setQuestions([]); load()
+  }
+
+  const del = async (id) => {
+    await sb.from('quiz_attempts').delete().eq('quiz_id', id)
+    await sb.from('quizzes').delete().eq('id', id)
+    toast.success('Deleted'); load()
+  }
+
+  const viewResults = async (quiz) => {
+    setViewQuiz(quiz)
+    const [attempts, students] = await Promise.all([
+      sb.from('quiz_attempts').select('*').eq('quiz_id', quiz.id).order('score', { ascending: false }),
+      sb.from('students').select('*')
+    ])
+    setResults((attempts.data || []).map(a => ({ ...a, studentName: (students.data || []).find(s => s.id === a.student_id)?.full_name || '—' })))
+  }
+
+  if (loading) return <SkeletonDashboard />
+
+  return (
+    <div className="page-enter">
+      <Card title={`Quizzes (${quizzes.length})`} icon="🧠" action={
+        <Btn onClick={() => { setForm({ status: 'draft', duration_minutes: 30 }); setQuestions([{ question: '', options: ['', '', '', ''], correct: 0 }]); setModal(true) }} icon="➕">Create Quiz</Btn>
+      } noPadding>
+        <Tbl headers={['Title', 'Batch', 'Questions', 'Duration', 'Status', 'Actions']} empty={quizzes.length === 0 ? <Empty icon="🧠" title="No quizzes" /> : null}>
+          {quizzes.map((q, i) => {
+            const qs = (() => { try { return JSON.parse(q.questions || '[]') } catch { return [] } })()
+            return (
+              <TR key={q.id} delay={i * .04}>
+                <TD style={{ fontWeight: 600, color: dark ? '#E5E7EB' : '#1F2937' }}>{q.title}</TD>
+                <TD style={{ fontSize: 12 }}>{batches.find(b => b.id === q.batch_id)?.name || '—'}</TD>
+                <TD><Bdg type="gold">{qs.length} MCQs</Bdg></TD>
+                <TD style={{ fontSize: 12 }}>{q.duration_minutes} min</TD>
+                <TD><Bdg type={q.status === 'active' ? 'success' : q.status === 'closed' ? 'danger' : 'warning'} dot>{q.status}</Bdg></TD>
+                <TD>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <Btn type="outline" size="xs" onClick={() => viewResults(q)}>📊</Btn>
+                    <Btn type="outline" size="xs" onClick={() => { setForm(q); setQuestions(qs); setModal(true) }}>✏️</Btn>
+                    <Btn type="danger" size="xs" onClick={() => del(q.id)}>🗑</Btn>
+                  </div>
+                </TD>
+              </TR>
+            )
+          })}
+        </Tbl>
+      </Card>
+
+      {/* Results Modal */}
+      <Modal open={!!viewQuiz} onClose={() => setViewQuiz(null)} title={`📊 Results — ${viewQuiz?.title || ''}`} icon="📊">
+        {results.length === 0 ? <Empty icon="📊" title="No attempts yet" /> : (
+          <Tbl headers={['Rank', 'Student', 'Score', 'Time']}>
+            {results.map((r, i) => (
+              <TR key={r.id} delay={i * .04}>
+                <TD><span style={{ fontWeight: 800, color: i < 3 ? '#FFD700' : '#6B7280' }}>#{i + 1}</span></TD>
+                <TD style={{ fontWeight: 600 }}>{r.studentName}</TD>
+                <TD><span style={{ fontWeight: 800, color: '#FFD700', fontFamily: "'Space Grotesk',sans-serif" }}>{r.score}/{viewQuiz?.total_marks || '?'}</span></TD>
+                <TD style={{ fontSize: 12 }}>{fmtDT(r.completed_at)}</TD>
+              </TR>
+            ))}
+          </Tbl>
+        )}
+      </Modal>
+
+      {/* Create/Edit Quiz Modal */}
+      <Modal open={modal} onClose={() => setModal(false)} title={form.id ? 'Edit Quiz' : 'Create Quiz'} icon="🧠" size="lg" footer={<><Btn type="ghost" onClick={() => setModal(false)}>Cancel</Btn><Btn onClick={save}>💾 Save Quiz</Btn></>}>
+        <Grid>
+          <Inp label="Title" required value={form.title || ''} onChange={e => setForm({ ...form, title: e.target.value })} />
+          <Sel label="Batch" required value={form.batch_id || ''} onChange={e => setForm({ ...form, batch_id: e.target.value })}>
+            <option value="">Select</option>
+            {batches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+          </Sel>
+        </Grid>
+        <Grid>
+          <Inp label="Duration (min)" type="number" value={form.duration_minutes || 30} onChange={e => setForm({ ...form, duration_minutes: e.target.value })} />
+          <Sel label="Status" value={form.status || 'draft'} onChange={e => setForm({ ...form, status: e.target.value })}>
+            <option value="draft">Draft</option>
+            <option value="active">Active</option>
+            <option value="closed">Closed</option>
+          </Sel>
+        </Grid>
+        <TA label="Description" value={form.description || ''} onChange={e => setForm({ ...form, description: e.target.value })} />
+
+        <div style={{ marginTop: 20, borderTop: `1px solid ${dark ? 'rgba(255,215,0,.06)' : 'rgba(0,0,0,.06)'}`, paddingTop: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#FFD700' }}>📝 Questions ({questions.length})</div>
+            <Btn type="outline" size="sm" onClick={addQuestion} icon="➕">Add Question</Btn>
+          </div>
+
+          {questions.map((q, qi) => (
+            <div key={qi} style={{ ...getGlassLight(dark), borderRadius: 16, padding: 20, marginBottom: 16, borderLeft: '3px solid #FFD700' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#FFD700' }}>Q{qi + 1}</span>
+                <Btn type="danger" size="xs" onClick={() => removeQ(qi)}>✕</Btn>
+              </div>
+              <Inp label="Question" value={q.question} onChange={e => updateQ(qi, 'question', e.target.value)} />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                {q.options.map((o, oi) => (
+                  <div key={oi} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <input type="radio" name={`q${qi}`} checked={q.correct === oi} onChange={() => updateQ(qi, 'correct', oi)} style={{ accentColor: '#FFD700' }} />
+                    <input value={o} onChange={e => updateQ(qi, String(oi), e.target.value)} placeholder={`Option ${String.fromCharCode(65 + oi)}`}
+                      style={{ flex: 1, padding: '10px 14px', background: q.correct === oi ? 'rgba(16,185,129,.06)' : (dark ? 'rgba(0,0,0,.2)' : '#FAFAFA'), border: `1px solid ${q.correct === oi ? 'rgba(16,185,129,.3)' : (dark ? 'rgba(255,255,255,.06)' : 'rgba(0,0,0,.1)')}`, borderRadius: 10, color: dark ? '#E5E7EB' : '#1F2937', fontSize: 13, fontFamily: "'Inter',sans-serif", outline: 'none' }} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </Modal>
+    </div>
+  )
+}
+
+// Student Quiz Page
+function StudentQuizPage() {
+  const { user } = useAuth(); const { dark } = useTheme()
+  const [quizzes, setQuizzes] = useState([]); const [attempts, setAttempts] = useState({}); const [loading, setLoading] = useState(true)
+  const [activeQuiz, setActiveQuiz] = useState(null); const [answers, setAnswers] = useState({}); const [timeLeft, setTimeLeft] = useState(0)
+  const [submitted, setSubmitted] = useState(false); const [result, setResult] = useState(null)
+  const timerRef = useRef(null)
+
+  const load = useCallback(async () => {
+    if (!user) return
+    const [q, a] = await Promise.all([
+      sb.from('quizzes').select('*').eq('batch_id', user.batch_id || '').eq('status', 'active'),
+      sb.from('quiz_attempts').select('*').eq('student_id', user.id)
+    ])
+    const map = {}; (a.data || []).forEach(x => map[x.quiz_id] = x)
+    setQuizzes(q.data || []); setAttempts(map); setLoading(false)
+  }, [user])
+  useEffect(() => { load() }, [load])
+
+  const startQuiz = (quiz) => {
+    if (attempts[quiz.id]) { toast.error('Already attempted!'); return }
+    const qs = (() => { try { return JSON.parse(quiz.questions || '[]') } catch { return [] } })()
+    setActiveQuiz({ ...quiz, parsedQuestions: qs })
+    setAnswers({}); setSubmitted(false); setResult(null)
+    setTimeLeft((quiz.duration_minutes || 30) * 60)
+  }
+
+  useEffect(() => {
+    if (!activeQuiz || submitted) return
+    timerRef.current = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) { clearInterval(timerRef.current); submitQuiz(); return 0 }
+        return prev - 1
+      })
+    }, 1000)
+    return () => clearInterval(timerRef.current)
+  }, [activeQuiz, submitted])
+
+  const submitQuiz = async () => {
+    if (submitted) return
+    setSubmitted(true); clearInterval(timerRef.current)
+    const qs = activeQuiz.parsedQuestions || []
+    let score = 0
+    qs.forEach((q, i) => { if (answers[i] === q.correct) score++ })
+    const attempt = { quiz_id: activeQuiz.id, student_id: user.id, score, total: qs.length, answers: JSON.stringify(answers), completed_at: new Date().toISOString() }
+    await sb.from('quiz_attempts').insert(attempt)
+    setResult({ score, total: qs.length })
+    toast.success(`Quiz submitted! Score: ${score}/${qs.length}`)
+    load()
+  }
+
+  const fmtTime = (s) => `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`
+
+  if (loading) return <SkeletonDashboard />
+
+  // Active quiz view
+  if (activeQuiz && !submitted) {
+    const qs = activeQuiz.parsedQuestions || []
+    return (
+      <div className="page-enter">
+        <div style={{ ...getGlass(dark), borderRadius: 20, padding: '20px 28px', marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 70, zIndex: 40 }}>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: dark ? '#E5E7EB' : '#1F2937' }}>{activeQuiz.title}</div>
+            <div style={{ fontSize: 12, color: '#6B7280' }}>{Object.keys(answers).length}/{qs.length} answered</div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 28, fontWeight: 900, color: timeLeft < 60 ? '#EF4444' : timeLeft < 300 ? '#F59E0B' : '#10B981' }}>{fmtTime(timeLeft)}</div>
+            <Btn onClick={submitQuiz} type="primary">Submit Quiz</Btn>
+          </div>
+        </div>
+        <PBar value={Object.keys(answers).length} max={qs.length} height={6} showLabel label="Progress" />
+        <div style={{ marginTop: 20 }}>
+          {qs.map((q, qi) => (
+            <div key={qi} style={{ ...getGlass(dark), borderRadius: 18, padding: 24, marginBottom: 16, borderLeft: answers[qi] !== undefined ? '4px solid #10B981' : '4px solid rgba(255,215,0,.2)' }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: dark ? '#E5E7EB' : '#1F2937', marginBottom: 16 }}>
+                <span style={{ color: '#FFD700', marginRight: 8 }}>Q{qi + 1}.</span>{q.question}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }} className="mf">
+                {q.options.map((opt, oi) => (
+                  <button key={oi} onClick={() => setAnswers({ ...answers, [qi]: oi })} style={{
+                    padding: '14px 18px', borderRadius: 12, cursor: 'pointer', fontFamily: "'Inter',sans-serif",
+                    fontSize: 13, fontWeight: 600, textAlign: 'left', transition: tr,
+                    background: answers[qi] === oi ? 'rgba(255,215,0,.1)' : (dark ? 'rgba(0,0,0,.2)' : 'rgba(0,0,0,.02)'),
+                    border: `2px solid ${answers[qi] === oi ? 'rgba(255,215,0,.4)' : 'transparent'}`,
+                    color: answers[qi] === oi ? '#FFD700' : (dark ? '#D1D5DB' : '#4B5563'),
+                  }}>
+                    <span style={{ fontWeight: 800, marginRight: 8 }}>{String.fromCharCode(65 + oi)}.</span>{opt}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  // Result view
+  if (submitted && result) {
+    const pct = result.total > 0 ? Math.round((result.score / result.total) * 100) : 0
+    return (
+      <div className="page-enter" style={{ textAlign: 'center', maxWidth: 500, margin: '0 auto' }}>
+        <div style={{ ...getGlass(dark), borderRadius: 24, padding: 48, animation: 'scaleIn .4s ease' }}>
+          <div style={{ fontSize: 72, marginBottom: 20 }}>{pct >= 80 ? '🏆' : pct >= 50 ? '✅' : '📝'}</div>
+          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 48, fontWeight: 900, color: '#FFD700', marginBottom: 8 }}>{result.score}/{result.total}</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: dark ? '#E5E7EB' : '#1F2937', marginBottom: 20 }}>{pct >= 80 ? 'Excellent!' : pct >= 50 ? 'Good Job!' : 'Keep Trying!'}</div>
+          <PBar value={result.score} max={result.total} height={14} />
+          <div style={{ marginTop: 30 }}><Btn onClick={() => { setActiveQuiz(null); setSubmitted(false) }}>← Back to Quizzes</Btn></div>
+        </div>
+      </div>
+    )
+  }
+
+  // Quiz list
+  return (
+    <Card title={`Available Quizzes (${quizzes.length})`} icon="🧠">
+      {quizzes.length === 0 ? <Empty icon="🧠" title="No quizzes" sub="No active quizzes for your batch" /> :
+        quizzes.map(q => {
+          const attempt = attempts[q.id]
+          const qs = (() => { try { return JSON.parse(q.questions || '[]') } catch { return [] } })()
+          return (
+            <div key={q.id} className="ch" style={{ ...getGlassLight(dark), borderRadius: 18, padding: 24, marginBottom: 16, borderLeft: `4px solid ${attempt ? '#10B981' : '#FFD700'}` }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+                <div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: dark ? '#E5E7EB' : '#1F2937', marginBottom: 5 }}>{q.title}</div>
+                  <div style={{ fontSize: 12, color: '#6B7280' }}>{qs.length} questions · {q.duration_minutes} min</div>
+                  {q.description && <div style={{ fontSize: 13, color: '#9CA3AF', marginTop: 6 }}>{q.description}</div>}
+                </div>
+                {attempt ? (
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 24, fontWeight: 900, color: '#FFD700' }}>{attempt.score}/{attempt.total}</div>
+                    <Bdg type="success" dot>Completed</Bdg>
+                  </div>
+                ) : <Btn onClick={() => startQuiz(q)} icon="🚀">Start Quiz</Btn>}
+              </div>
+            </div>
+          )
+        })}
+    </Card>
+  )
+}
+
+// ═══════════════════════════════════════
+// ANALYTICS DASHBOARD
+// ═══════════════════════════════════════
+function AnalyticsPage() {
+  const { dark } = useTheme()
+  const [data, setData] = useState(null); const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    (async () => {
+      const [students, payments, attendance, classes, batches, assignments, submissions] = await Promise.all([
+        sb.from('students').select('*'),
+        sb.from('fee_payments').select('*'),
+        sb.from('attendance').select('*'),
+        sb.from('classes').select('*'),
+        sb.from('batches').select('*'),
+        sb.from('assignments').select('*'),
+        sb.from('submissions').select('*')
+      ])
+      const allStudents = students.data || []
+      const allPayments = payments.data || []
+      const allAtt = attendance.data || []
+      const allBatches = batches.data || []
+
+      // Revenue by month
+      const revByMonth = {}
+      allStudents.forEach(s => {
+        const d = new Date(s.created_at)
+        const key = MONTH_SHORT[d.getMonth()]
+        revByMonth[key] = (revByMonth[key] || 0) + (s.fee_paid || 0)
+      })
+      allPayments.forEach(p => {
+        if (p.month) revByMonth[p.month.substring(0, 3)] = (revByMonth[p.month.substring(0, 3)] || 0) + (p.paid_amount || 0)
+      })
+      const revenueChart = MONTH_SHORT.map(m => ({ month: m, revenue: revByMonth[m] || 0 })).filter(d => d.revenue > 0)
+
+      // Student growth
+      const monthCounts = {}
+      allStudents.forEach(s => { const m = MONTH_SHORT[new Date(s.created_at).getMonth()]; monthCounts[m] = (monthCounts[m] || 0) + 1 })
+      let cum = 0
+      const growthChart = MONTH_SHORT.map(m => { cum += (monthCounts[m] || 0); return { month: m, total: cum, new: monthCounts[m] || 0 } }).filter(d => d.total > 0)
+
+      // Batch comparison
+      const batchChart = allBatches.map(b => {
+        const bStudents = allStudents.filter(s => s.batch_id === b.id)
+        const bClasses = (classes.data || []).filter(c => c.batch_id === b.id)
+        const totalAtt = allAtt.filter(a => bClasses.some(c => c.id === a.class_id))
+        const presentAtt = totalAtt.filter(a => a.status === 'present')
+        return { name: b.name?.substring(0, 12), students: bStudents.length, classes: bClasses.length, attPct: totalAtt.length > 0 ? Math.round((presentAtt.length / totalAtt.length) * 100) : 0, revenue: bStudents.reduce((a, s) => a + (s.fee_paid || 0), 0) }
+      })
+
+      // Attendance trends by week
+      const weekMap = {}
+      allAtt.forEach(a => {
+        const d = new Date(a.marked_at || a.created_at)
+        const wk = `W${Math.ceil(d.getDate() / 7)}`
+        if (!weekMap[wk]) weekMap[wk] = { present: 0, absent: 0, late: 0 }
+        weekMap[wk][a.status === 'present' ? 'present' : a.status === 'late' ? 'late' : 'absent']++
+      })
+      const attTrend = Object.entries(weekMap).slice(-8).map(([wk, v]) => ({ week: wk, ...v, rate: (v.present + v.absent + v.late) > 0 ? Math.round(v.present / (v.present + v.absent + v.late) * 100) : 0 }))
+
+      setData({ revenueChart, growthChart, batchChart, attTrend, totalRevenue: allStudents.reduce((a, s) => a + (s.fee_paid || 0), 0), totalStudents: allStudents.length, totalAssignments: (assignments.data || []).length, totalSubmissions: (submissions.data || []).length })
+      setLoading(false)
+    })()
+  }, [])
+
+  if (loading) return <SkeletonDashboard />
+  if (!data) return <Empty icon="📈" title="No data" />
+
+  return (
+    <div className="page-enter">
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 18, marginBottom: 26 }}>
+        <Stat icon="💰" value={data.totalRevenue} label="Total Revenue" sub={currency(data.totalRevenue)} />
+        <Stat icon="👥" value={data.totalStudents} label="Students" color="#10B981" />
+        <Stat icon="📝" value={data.totalAssignments} label="Assignments" color="#3B82F6" />
+        <Stat icon="📤" value={data.totalSubmissions} label="Submissions" color="#F59E0B" />
+      </div>
+
+      <Grid gap={24}>
+        <Card title="💰 Revenue Trend" icon="💰" delay={.1}>
+          <ResponsiveContainer width="100%" height={280}>
+            <AreaChart data={data.revenueChart}>
+              <XAxis dataKey="month" tick={{ fill: '#6B7280', fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: '#6B7280', fontSize: 11 }} axisLine={false} tickLine={false} />
+              <Tooltip {...chartTooltip} />
+              <Area type="monotone" dataKey="revenue" stroke="#10B981" fill="rgba(16,185,129,.15)" strokeWidth={2.5} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </Card>
+
+        <Card title="📈 Student Growth" icon="📈" delay={.15}>
+          <ResponsiveContainer width="100%" height={280}>
+            <LineChart data={data.growthChart}>
+              <XAxis dataKey="month" tick={{ fill: '#6B7280', fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: '#6B7280', fontSize: 11 }} axisLine={false} tickLine={false} />
+              <Tooltip {...chartTooltip} />
+              <Line type="monotone" dataKey="total" stroke="#FFD700" strokeWidth={2.5} dot={{ fill: '#FFD700', r: 4 }} />
+              <Line type="monotone" dataKey="new" stroke="#3B82F6" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        </Card>
+      </Grid>
+
+      <Grid gap={24} style={{ marginTop: 24 }}>
+        <Card title="🏫 Batch Comparison" icon="🏫" delay={.2}>
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={data.batchChart}>
+              <XAxis dataKey="name" tick={{ fill: '#6B7280', fontSize: 10 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: '#6B7280', fontSize: 11 }} axisLine={false} tickLine={false} />
+              <Tooltip {...chartTooltip} />
+              <Bar dataKey="students" fill="#FFD700" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="attPct" fill="#10B981" radius={[6, 6, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </Card>
+
+        <Card title="✅ Attendance Trend" icon="✅" delay={.25}>
+          <ResponsiveContainer width="100%" height={280}>
+            <LineChart data={data.attTrend}>
+              <XAxis dataKey="week" tick={{ fill: '#6B7280', fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: '#6B7280', fontSize: 11 }} axisLine={false} tickLine={false} domain={[0, 100]} />
+              <Tooltip {...chartTooltip} />
+              <Line type="monotone" dataKey="rate" stroke="#10B981" strokeWidth={2.5} dot={{ fill: '#10B981', r: 4 }} name="Attendance %" />
+            </LineChart>
+          </ResponsiveContainer>
+        </Card>
+      </Grid>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════
+// PROGRESS REPORT PDF
+// ═══════════════════════════════════════
+function ProgressReportPage() {
+  const { dark } = useTheme()
+  const [students, setStudents] = useState([]); const [batches, setBatches] = useState([]); const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+
+  useEffect(() => {
+    Promise.all([sb.from('students').select('*').order('full_name'), sb.from('batches').select('*')]).then(([s, b]) => {
+      setStudents(s.data || []); setBatches(b.data || []); setLoading(false)
+    })
+  }, [])
+
+  const generateReport = async (student) => {
+    toast.loading('Generating...', { id: 'report' })
+    const [attRes, classRes, subRes, asnRes, payRes] = await Promise.all([
+      sb.from('attendance').select('*').eq('student_id', student.id),
+      sb.from('classes').select('*').eq('batch_id', student.batch_id || ''),
+      sb.from('submissions').select('*').eq('student_id', student.id),
+      sb.from('assignments').select('*').eq('batch_id', student.batch_id || ''),
+      sb.from('fee_payments').select('*').eq('student_id', student.id)
+    ])
+    const att = attRes.data || []; const cls = classRes.data || []; const subs = subRes.data || []; const asns = asnRes.data || []; const pays = payRes.data || []
+    const present = att.filter(a => a.status === 'present').length
+    const total = cls.length; const attPct = total > 0 ? Math.round((present / total) * 100) : 0
+    const batchName = batches.find(b => b.id === student.batch_id)?.name || '—'
+
+    // Assignment marks
+    const asnMarks = asns.map(a => {
+      const sub = subs.find(s => s.assignment_id === a.id)
+      return { title: a.title, total: a.total_marks || 100, obtained: sub?.marks_obtained ?? '—', status: sub ? (sub.marks_obtained != null ? 'Graded' : 'Submitted') : 'Not Submitted' }
+    })
+    const gradedSubs = subs.filter(s => s.marks_obtained != null)
+    const avgMarks = gradedSubs.length > 0 ? Math.round(gradedSubs.reduce((a, s) => a + (s.marks_obtained || 0), 0) / gradedSubs.length) : 0
+    const overallGrade = attPct >= 80 && avgMarks >= 80 ? 'A+' : attPct >= 70 && avgMarks >= 70 ? 'A' : attPct >= 60 && avgMarks >= 60 ? 'B' : attPct >= 50 && avgMarks >= 50 ? 'C' : 'D'
+    const feeStatus = student.fee_status || 'pending'
+    const feePaid = student.fee_paid || 0; const feeTotal = student.fee_amount || 0
+
+    const w = window.open('', '_blank')
+    w.document.write(`<!DOCTYPE html><html><head><title>Progress Report - ${student.full_name}</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',sans-serif;background:#f5f5f5;padding:30px;display:flex;justify-content:center}
+.report{width:700px;background:#fff;border-radius:0;overflow:hidden;box-shadow:0 4px 30px rgba(0,0,0,.1)}
+.header{background:linear-gradient(135deg,#0a0a0a,#1a1a1a);padding:36px 40px;text-align:center;border-bottom:4px solid #FFD700;position:relative;overflow:hidden}
+.header::after{content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:radial-gradient(circle,rgba(255,215,0,.03),transparent 50%)}
+.logo{font-size:32px;letter-spacing:8px;font-weight:900;margin-bottom:2px;position:relative;z-index:1}
+.title{font-size:24px;font-weight:800;color:#FFD700;position:relative;z-index:1}
+.subtitle{font-size:11px;letter-spacing:4px;color:rgba(255,255,255,.5);font-weight:700;margin-top:4px;position:relative;z-index:1}
+.body{padding:36px 40px}
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:28px}
+.info-item{padding:14px 18px;background:#f9fafb;border-radius:10px;border-left:3px solid #FFD700}
+.info-label{font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#888;margin-bottom:4px;font-weight:700}
+.info-value{font-size:14px;font-weight:700;color:#1a1a1a}
+.grade-box{text-align:center;padding:28px;background:linear-gradient(135deg,#fefce8,#fef3c7);border-radius:16px;margin-bottom:28px;border:2px solid #FFD700}
+.grade{font-size:64px;font-weight:900;color:#d97706;line-height:1}
+.grade-label{font-size:12px;color:#92400e;font-weight:700;text-transform:uppercase;letter-spacing:2px;margin-top:8px}
+.section{margin-bottom:24px}
+.section-title{font-size:14px;font-weight:800;color:#1a1a1a;margin-bottom:14px;padding-bottom:8px;border-bottom:2px solid #f3f4f6;display:flex;align-items:center;gap:8px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{background:#f9fafb;padding:10px 14px;text-align:left;font-weight:700;color:#4b5563;border-bottom:2px solid #e5e7eb;font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+td{padding:10px 14px;border-bottom:1px solid #f3f4f6;color:#374151}
+.bar-bg{height:10px;background:#f3f4f6;border-radius:10px;overflow:hidden}
+.bar-fill{height:100%;border-radius:10px}
+.footer{text-align:center;padding:24px 40px;border-top:2px solid #f3f4f6;background:#fafafa}
+.footer p{font-size:10px;color:#999;margin-bottom:3px}
+.badge{display:inline-block;padding:4px 12px;border-radius:20px;font-size:10px;font-weight:700;text-transform:uppercase}
+.paid{background:#d1fae5;color:#059669}.partial{background:#fef3c7;color:#d97706}.pending{background:#fee2e2;color:#dc2626}
+@media print{body{background:#fff;padding:0}.report{box-shadow:none}}
+</style></head><body>
+<div class="report">
+<div class="header">
+<div class="logo"><span style="color:#fff">AEM</span><span style="color:#FFD700">T</span><span style="color:#fff">ECH</span></div>
+<div class="subtitle">INSTITUTE — Design the Future</div>
+<div class="title">Student Progress Report</div>
+</div>
+<div class="body">
+<div class="info-grid">
+<div class="info-item"><div class="info-label">Student Name</div><div class="info-value">${student.full_name}</div></div>
+<div class="info-item"><div class="info-label">Batch</div><div class="info-value">${batchName}</div></div>
+<div class="info-item"><div class="info-label">Email</div><div class="info-value">${student.email || '—'}</div></div>
+<div class="info-item"><div class="info-label">Phone</div><div class="info-value">${student.phone || '—'}</div></div>
+<div class="info-item"><div class="info-label">Report Date</div><div class="info-value">${new Date().toLocaleDateString('en-PK', { day: '2-digit', month: 'long', year: 'numeric' })}</div></div>
+<div class="info-item"><div class="info-label">Enrollment</div><div class="info-value">${student.created_at ? new Date(student.created_at).toLocaleDateString('en-PK', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</div></div>
+</div>
+
+<div class="grade-box">
+<div class="grade">${overallGrade}</div>
+<div class="grade-label">Overall Grade</div>
+</div>
+
+<div class="section">
+<div class="section-title">✅ Attendance Summary</div>
+<div class="info-grid">
+<div class="info-item"><div class="info-label">Present</div><div class="info-value" style="color:#059669">${present}/${total}</div></div>
+<div class="info-item"><div class="info-label">Attendance Rate</div><div class="info-value" style="color:${attPct >= 80 ? '#059669' : attPct >= 60 ? '#d97706' : '#dc2626'}">${attPct}%</div></div>
+</div>
+<div class="bar-bg" style="margin-top:8px"><div class="bar-fill" style="width:${attPct}%;background:${attPct >= 80 ? '#10b981' : attPct >= 60 ? '#f59e0b' : '#ef4444'}"></div></div>
+</div>
+
+<div class="section">
+<div class="section-title">📝 Assignment Performance</div>
+<table>
+<tr><th>Assignment</th><th>Total Marks</th><th>Obtained</th><th>Status</th></tr>
+${asnMarks.map(a => `<tr><td>${a.title}</td><td>${a.total}</td><td style="font-weight:700;color:${typeof a.obtained === 'number' ? '#d97706' : '#9ca3af'}">${a.obtained}</td><td><span class="badge" style="background:${a.status === 'Graded' ? '#d1fae5' : a.status === 'Submitted' ? '#fef3c7' : '#fee2e2'};color:${a.status === 'Graded' ? '#059669' : a.status === 'Submitted' ? '#d97706' : '#dc2626'}">${a.status}</span></td></tr>`).join('')}
+</table>
+${gradedSubs.length > 0 ? `<div style="margin-top:12px;padding:12px 16px;background:#f9fafb;border-radius:8px;display:flex;justify-content:space-between"><span style="font-size:12px;color:#666">Average Marks</span><span style="font-size:16px;font-weight:800;color:#d97706">${avgMarks}%</span></div>` : ''}
+</div>
+
+<div class="section">
+<div class="section-title">💰 Fee Status</div>
+<div class="info-grid">
+<div class="info-item"><div class="info-label">Total Fee</div><div class="info-value">PKR ${feeTotal.toLocaleString()}</div></div>
+<div class="info-item"><div class="info-label">Paid</div><div class="info-value" style="color:#059669">PKR ${feePaid.toLocaleString()}</div></div>
+<div class="info-item"><div class="info-label">Outstanding</div><div class="info-value" style="color:#dc2626">PKR ${Math.max(0, feeTotal - feePaid).toLocaleString()}</div></div>
+<div class="info-item"><div class="info-label">Status</div><div class="info-value"><span class="badge ${feeStatus}">${feeStatus.toUpperCase()}</span></div></div>
+</div>
+</div>
+</div>
+<div class="footer">
+<p style="font-size:12px;color:#666;font-weight:600;margin-bottom:8px">Thank you for being part of AEMTECH! 🙏</p>
+<p>AEMTECH Institute — Design the Future</p>
+<p>This is a computer generated progress report • ${new Date().toLocaleDateString()}</p>
+</div>
+</div>
+<script>window.onload=()=>{setTimeout(()=>window.print(),600)}<\\/script>
+</body></html>`)
+    w.document.close()
+    toast.success('Report generated! 📄', { id: 'report' })
+  }
+
+  if (loading) return <SkeletonDashboard />
+  const filtered = students.filter(s => !search || s.full_name?.toLowerCase().includes(search.toLowerCase()))
+
+  return (
+    <Card title="📄 Student Progress Reports" icon="📄" action={<Search value={search} onChange={e => setSearch(e.target.value)} />}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 16 }}>
+        {filtered.map(s => (
+          <div key={s.id} className="ch" style={{ ...getGlassLight(dark), borderRadius: 18, padding: 22, textAlign: 'center' }}>
+            <Av name={s.full_name} src={s.profile_image || null} size={56} glow />
+            <div style={{ fontSize: 14, fontWeight: 700, marginTop: 14, color: dark ? '#E5E7EB' : '#1F2937' }}>{s.full_name}</div>
+            <div style={{ fontSize: 11, color: '#6B7280', marginBottom: 4 }}>{batches.find(b => b.id === s.batch_id)?.name || '—'}</div>
+            <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginBottom: 14 }}>
+              <Bdg type={statusBadge(s.status)} size="sm" dot>{s.status}</Bdg>
+              <Bdg type={statusBadge(s.fee_status)} size="sm">{s.fee_status || 'pending'}</Bdg>
+            </div>
+            <Btn onClick={() => generateReport(s)} size="sm" full icon="📄">Generate Report</Btn>
+          </div>
+        ))}
+        {filtered.length === 0 && <Empty icon="📄" title="No students found" />}
+      </div>
+    </Card>
+  )
+}
+
+const pageTitles = { dashboard: '📊 Dashboard', students: '👥 Students', admissions: '📋 Admissions', batches: '🏫 Batches', classes: '📅 Classes', attendance: '✅ Attendance', assignments: '📝 Assignments', submissions: '📤 Submissions', recordings: '🎥 Recordings', fees: '💰 Fee Management', announcements: '📢 Announcements', certificates: '🎓 Certificates', leaderboard: '🏆 Leaderboard', sync: '🔄 Sheet Sync', excel: '📈 Import/Export', settings: '⚙️ Settings', certificate: '🎓 My Certificate', profile: '👤 My Profile', timetable: '🗓 Timetable', quizzes: '🧠 Quizzes', analytics: '📈 Analytics', progress: '📄 Progress Report' }
 
 function Portal() {
   const { isLoggedIn, isAdmin, isStudent, user } = useAuth()
@@ -2779,19 +3703,22 @@ function Portal() {
     return () => window.removeEventListener('keydown', handle)
   }, [isLoggedIn, setPage])
 
+  const { addNotification } = useNotifications()
+
   useEffect(() => {
     if (!isLoggedIn) return
-    const channel = sb.channel('portal-v3')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, () => toast.success('📊 Updated!', { duration: 2000, icon: '🔄' }))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'submissions' }, () => toast.success('📤 Submission!', { duration: 2000, icon: '📤' }))
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'admissions' }, () => { toast.success('📋 New admission!', { duration: 3000, icon: '📋' }); setPendingCount(p => p + 1) })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'fee_payments' }, () => toast.success('💰 Payment!', { duration: 2000, icon: '💰' }))
+    const channel = sb.channel('portal-v4')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, () => { toast.success('📊 Updated!', { duration: 2000, icon: '🔄' }); addNotification({ type:'student', title:'Student Updated', message:'A student record was updated' }) })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'submissions' }, () => { toast.success('📤 Submission!', { duration: 2000, icon: '📤' }); addNotification({ type:'submission', title:'New Submission', message:'A student submitted an assignment' }) })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'admissions' }, () => { toast.success('📋 New admission!', { duration: 3000, icon: '📋' }); setPendingCount(p => p + 1); addNotification({ type:'admission', title:'New Admission', message:'A new application was submitted' }) })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'fee_payments' }, () => { toast.success('💰 Payment!', { duration: 2000, icon: '💰' }); addNotification({ type:'fee', title:'Fee Payment', message:'A fee payment was recorded' }) })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'announcements' }, () => { addNotification({ type:'announcement', title:'New Announcement', message:'A new announcement was posted' }) })
       .subscribe()
     return () => { sb.removeChannel(channel) }
   }, [isLoggedIn])
 
-  const adminPages = { dashboard: <AdminDashboard />, students: <StudentsPage />, admissions: <AdmissionsPage />, batches: <BatchesPage />, classes: <ClassesPage />, attendance: <AttendancePage />, assignments: <AssignmentsPage />, submissions: <SubmissionsPage />, recordings: <RecordingsPage />, fees: <FeesPage />, announcements: <AnnouncementsPage />, certificates: <CertificatesPage />, leaderboard: <LeaderboardPage />, sync: <SheetSyncPage />, excel: <ExcelPage />, settings: <SettingsPage /> }
-  const studentPages = { dashboard: <StudentDashboard />, attendance: <StudentAttendancePage />, assignments: <StudentAssignmentsPage />, recordings: <StudentRecordingsPage />, announcements: <StudentAnnouncementsPage />, fees: <StudentFeesPage />, certificate: <StudentCertificatePage />, profile: <StudentProfilePage /> }
+  const adminPages = { dashboard: <AdminDashboard />, students: <StudentsPage />, admissions: <AdmissionsPage />, batches: <BatchesPage />, classes: <ClassesPage />, attendance: <AttendancePage />, assignments: <AssignmentsPage />, submissions: <SubmissionsPage />, recordings: <RecordingsPage />, fees: <FeesPage />, announcements: <AnnouncementsPage />, certificates: <CertificatesPage />, leaderboard: <LeaderboardPage />, sync: <SheetSyncPage />, excel: <ExcelPage />, settings: <SettingsPage />, timetable: <TimetablePage />, quizzes: <QuizAdminPage />, analytics: <AnalyticsPage />, progress: <ProgressReportPage /> }
+  const studentPages = { dashboard: <StudentDashboard />, attendance: <StudentAttendancePage />, assignments: <StudentAssignmentsPage />, recordings: <StudentRecordingsPage />, announcements: <StudentAnnouncementsPage />, fees: <StudentFeesPage />, certificate: <StudentCertificatePage />, profile: <StudentProfilePage />, timetable: <StudentTimetablePage />, quizzes: <StudentQuizPage /> }
 
   if (!isLoggedIn) return <LoginPage />
 
@@ -2845,21 +3772,25 @@ function AemtechApp() {
   return (
     <ThemeCtx.Provider value={{ dark: darkMode, toggle: toggleDarkMode }}>
       <AuthProvider>
-        <Toaster position="top-right" toastOptions={{
-          style: {
-            background: darkMode ? 'rgba(12,12,14,.95)' : 'rgba(255,255,255,.95)',
-            color: darkMode ? '#E5E7EB' : '#1F2937',
-            border: `1px solid ${darkMode ? 'rgba(255,215,0,.08)' : 'rgba(0,0,0,.06)'}`,
-            fontFamily: 'Inter,sans-serif', fontSize: 13,
-            backdropFilter: 'blur(16px)',
-            boxShadow: '0 10px 36px rgba(0,0,0,.2)',
-            borderRadius: 14, padding: '14px 18px',
-          },
-          success: { iconTheme: { primary: '#FFD700', secondary: darkMode ? '#000' : '#fff' } },
-          error: { iconTheme: { primary: '#EF4444', secondary: '#fff' } },
-          duration: 3000,
-        }} />
-        <Portal />
+        <NotificationProvider>
+          <ConfirmProvider>
+            <Toaster position="top-right" toastOptions={{
+              style: {
+                background: darkMode ? 'rgba(12,12,14,.95)' : 'rgba(255,255,255,.95)',
+                color: darkMode ? '#E5E7EB' : '#1F2937',
+                border: `1px solid ${darkMode ? 'rgba(255,215,0,.08)' : 'rgba(0,0,0,.06)'}`,
+                fontFamily: 'Inter,sans-serif', fontSize: 13,
+                backdropFilter: 'blur(16px)',
+                boxShadow: '0 10px 36px rgba(0,0,0,.2)',
+                borderRadius: 14, padding: '14px 18px',
+              },
+              success: { iconTheme: { primary: '#FFD700', secondary: darkMode ? '#000' : '#fff' } },
+              error: { iconTheme: { primary: '#EF4444', secondary: '#fff' } },
+              duration: 3000,
+            }} />
+            <Portal />
+          </ConfirmProvider>
+        </NotificationProvider>
       </AuthProvider>
     </ThemeCtx.Provider>
   )
