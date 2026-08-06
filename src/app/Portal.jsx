@@ -2219,30 +2219,40 @@ function StudentDashboard() {
       <Card title="🚀 Learning Journey" icon="🚀" delay={.1}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {[
-            { month: 'Month 1', title: 'Canva Designing', progress: Math.min(100, Math.round((Math.min(data.present, 8) / 8) * 100)), icon: '🎨', color: '#FFD700' },
-            { month: 'Month 2', title: 'Shopify + AI', progress: data.total >= 8 ? Math.min(100, Math.round((Math.max(0, Math.min(data.present - 8, 8)) / 8) * 100)) : 0, icon: '🛒', color: '#10B981' },
-            { month: 'Month 3', title: 'Digital Marketing', progress: data.total >= 16 ? Math.min(100, Math.round((Math.max(0, Math.min(data.present - 16, 8)) / 8) * 100)) : 0, icon: '📈', color: '#3B82F6' },
-          ].map(({ month, title, progress, icon, color }) => (
-            <div key={month} style={{ ...getGlassLight(dark), borderRadius: 16, padding: '18px 22px', display: 'flex', alignItems: 'center', gap: 18 }}>
-              <div style={{ width: 50, height: 50, borderRadius: 14, background: `${color}12`, border: `1px solid ${color}25`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>{icon}</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 7 }}>
-                  <div><span style={{ fontSize: 10, color: '#6B7280', textTransform: 'uppercase', letterSpacing: 1.2 }}>{month}</span><div style={{ fontSize: 15, fontWeight: 700, color: dark ? '#E5E7EB' : '#1F2937', marginTop: 3 }}>{title}</div></div>
-                  <span style={{ fontSize: 15, fontWeight: 800, color, fontFamily: "'Space Grotesk',sans-serif" }}>{progress}%</span>
+            { module: 'Orientation', title: 'Welcome & Setup', classes: 1, icon: '🎯', color: '#8B5CF6' },
+            { module: 'Month 1', title: 'Canva Designing', classes: 8, icon: '🎨', color: '#FFD700' },
+            { module: 'Month 2', title: 'Shopify + AI', classes: 8, icon: '🛒', color: '#10B981' },
+            { module: 'Month 3', title: 'Digital Marketing', classes: 8, icon: '📈', color: '#3B82F6' },
+          ].map((mod, idx) => {
+            // Calculate start class for each module
+            const starts = [0, 1, 9, 17] // Orientation starts at 0, Canva at 1, Shopify at 9, Marketing at 17
+            const startClass = starts[idx]
+            const attendedInModule = Math.max(0, Math.min(data.present - startClass, mod.classes))
+            const progress = mod.classes > 0 ? Math.min(100, Math.round((attendedInModule / mod.classes) * 100)) : 0
+            const isLocked = data.present < startClass
+            return (
+              <div key={mod.module} style={{ ...getGlassLight(dark), borderRadius: 16, padding: '18px 22px', display: 'flex', alignItems: 'center', gap: 18, opacity: isLocked ? 0.5 : 1 }}>
+                <div style={{ width: 50, height: 50, borderRadius: 14, background: `${mod.color}12`, border: `1px solid ${mod.color}25`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>{mod.icon}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 7 }}>
+                    <div><span style={{ fontSize: 10, color: '#6B7280', textTransform: 'uppercase', letterSpacing: 1.2 }}>{mod.module}</span><div style={{ fontSize: 15, fontWeight: 700, color: dark ? '#E5E7EB' : '#1F2937', marginTop: 3 }}>{mod.title}</div></div>
+                    <span style={{ fontSize: 15, fontWeight: 800, color: mod.color, fontFamily: "'Space Grotesk',sans-serif" }}>{isLocked ? '—' : progress + '%'}</span>
+                  </div>
+                  <PBar value={isLocked ? 0 : attendedInModule} max={mod.classes} height={9} color={mod.color} />
+                  <div style={{ fontSize: 10, color: '#4B5563', marginTop: 4 }}>{isLocked ? 'Locked' : `${attendedInModule}/${mod.classes} classes`}</div>
                 </div>
-                <PBar value={progress} max={100} height={9} color={color} />
+                <span style={{ fontSize: 20 }}>{isLocked ? '🔒' : progress >= 100 ? '✅' : progress > 0 ? '🔄' : '⏳'}</span>
               </div>
-              <span style={{ fontSize: 20 }}>{progress >= 100 ? '✅' : progress > 0 ? '🔄' : '🔒'}</span>
-            </div>
-          ))}
+            )
+          })}
         </div>
         <div style={{ marginTop: 22, ...getGlassLight(dark), borderRadius: 16, padding: '20px 24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: dark ? '#E5E7EB' : '#1F2937' }}>Overall</span>
-            <span style={{ fontSize: 18, fontWeight: 800, color: '#FFD700', fontFamily: "'Space Grotesk',sans-serif" }}>{data.total > 0 ? Math.round((data.present / 24) * 100) : 0}%</span>
+            <span style={{ fontSize: 15, fontWeight: 700, color: dark ? '#E5E7EB' : '#1F2937' }}>Overall Progress</span>
+            <span style={{ fontSize: 18, fontWeight: 800, color: '#FFD700', fontFamily: "'Space Grotesk',sans-serif" }}>{data.total > 0 ? Math.round((data.present / 25) * 100) : 0}%</span>
           </div>
-          <PBar value={data.present} max={24} height={14} color="#FFD700" />
-          <div style={{ fontSize: 12, color: '#6B7280', marginTop: 10 }}>{data.present}/24 · {Math.max(0, 24 - data.present)} remaining</div>
+          <PBar value={data.present} max={25} height={14} color="#FFD700" />
+          <div style={{ fontSize: 12, color: '#6B7280', marginTop: 10 }}>{data.present}/25 classes · {Math.max(0, 25 - data.present)} remaining</div>
         </div>
       </Card>
 
@@ -2339,16 +2349,71 @@ function StudentAttendancePage() {
 function StudentAssignmentsPage() {
   const { user } = useAuth(); const { dark } = useTheme()
   const [assignments, setAssignments] = useState([]); const [subMap, setSubMap] = useState({}); const [loading, setLoading] = useState(true); const [modal, setModal] = useState(null); const [form, setForm] = useState({}); const [uploading, setUploading] = useState(false)
+  const [uploadedFiles, setUploadedFiles] = useState([]) // Multiple files support
+  
   const load = useCallback(async () => { if (!user) return; setLoading(true); const [a, s] = await Promise.all([sb.from('assignments').select('*').eq('batch_id', user.batch_id || '').order('due_date'), sb.from('submissions').select('*').eq('student_id', user.id)]); const map = {}; (s.data || []).forEach(x => map[x.assignment_id] = x); setAssignments(a.data || []); setSubMap(map); setLoading(false) }, [user])
   useEffect(() => { load() }, [load])
-  const handleFile = async e => { const file = e.target.files[0]; if (!file) return; setUploading(true); try { const ext = file.name.split('.').pop(); const url = await uploadFile(file, 'recordings', `submissions/${user.id}-${Date.now()}.${ext}`); setForm(f => ({ ...f, link: url })); toast.success('Uploaded!') } catch { toast.error('Failed') } finally { setUploading(false); e.target.value = '' } }
-  const submit = async () => { if (!form.link && !form.text) { toast.error('Add link or note'); return }; await sb.from('submissions').insert({ assignment_id: form.id, student_id: user.id, submission_link: form.link, submission_text: form.text, status: 'submitted' }); toast.success('Submitted! 🎉'); setModal(null); load() }
+  
+  // Multiple files upload handler
+  const handleFiles = async e => { 
+    const files = Array.from(e.target.files || [])
+    if (files.length === 0) return
+    setUploading(true)
+    try {
+      const uploaded = []
+      for (const file of files) {
+        const ext = file.name.split('.').pop()
+        const url = await uploadFile(file, 'recordings', `submissions/${user.id}-${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`)
+        uploaded.push({ name: file.name, url })
+      }
+      setUploadedFiles(prev => [...prev, ...uploaded])
+      toast.success(`${files.length} file(s) uploaded! 📎`)
+    } catch { toast.error('Upload failed') } 
+    finally { setUploading(false); e.target.value = '' } 
+  }
+  
+  const removeFile = (idx) => setUploadedFiles(prev => prev.filter((_, i) => i !== idx))
+  
+  const submit = async () => { 
+    // Combine manual link + uploaded files
+    const allLinks = []
+    if (form.link) allLinks.push(form.link)
+    uploadedFiles.forEach(f => allLinks.push(f.url))
+    
+    if (allLinks.length === 0 && !form.text) { toast.error('Add link, files, or note'); return }
+    
+    // Store multiple links as JSON or comma-separated
+    const submissionLink = allLinks.length === 1 ? allLinks[0] : JSON.stringify(allLinks)
+    
+    await sb.from('submissions').insert({ 
+      assignment_id: form.id, 
+      student_id: user.id, 
+      submission_link: submissionLink, 
+      submission_text: form.text, 
+      status: 'submitted' 
+    })
+    toast.success('Submitted! 🎉')
+    setModal(null)
+    setUploadedFiles([])
+    load() 
+  }
+  
+  // Parse submission links (handle both single and multiple)
+  const parseLinks = (link) => {
+    if (!link) return []
+    try { 
+      const parsed = JSON.parse(link)
+      return Array.isArray(parsed) ? parsed : [link]
+    } catch { return [link] }
+  }
+  
   if (loading) return <SkeletonDashboard />
   return (
     <>
       <Card title={`My Assignments (${assignments.length})`} icon="📝">
         {assignments.length === 0 ? <Empty icon="📝" title="No assignments" /> : assignments.map(a => {
           const sub = subMap[a.id]; const over = new Date(a.due_date) < new Date() && !sub
+          const links = sub ? parseLinks(sub.submission_link) : []
           return (
             <div key={a.id} className="ch" style={{ ...getGlassLight(dark), borderRadius: 16, padding: 24, marginBottom: 16, borderLeft: `4px solid ${sub ? '#10B981' : over ? '#EF4444' : '#FFD700'}` }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
@@ -2361,13 +2426,21 @@ function StudentAssignmentsPage() {
               {a.description && <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 16, lineHeight: 1.7, background: dark ? 'rgba(255,255,255,.02)' : 'rgba(0,0,0,.02)', padding: 14, borderRadius: 10 }}>{a.description}</div>}
               {sub ? (
                 <div style={{ background: 'rgba(16,185,129,.04)', border: '1px solid rgba(16,185,129,.12)', borderRadius: 12, padding: 16 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: '#10B981', marginBottom: 6 }}>✅ Submitted — {fmtDT(sub.submitted_at)}</div>
-                  {sub.submission_link && <a href={sub.submission_link} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: '#FFD700' }}>🔗 View</a>}
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#10B981', marginBottom: 8 }}>✅ Submitted — {fmtDT(sub.submitted_at)}</div>
+                  {links.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+                      {links.map((link, i) => (
+                        <a key={i} href={link} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#FFD700', background: 'rgba(255,215,0,.08)', padding: '6px 12px', borderRadius: 8, textDecoration: 'none' }}>
+                          📎 File {links.length > 1 ? i + 1 : ''}
+                        </a>
+                      ))}
+                    </div>
+                  )}
                   {sub.marks_obtained != null && <div style={{ fontWeight: 800, color: '#FFD700', fontSize: 18, marginTop: 10, fontFamily: "'Space Grotesk',sans-serif" }}>Marks: {sub.marks_obtained}/{a.total_marks}</div>}
                   {sub.feedback && <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 10, padding: '10px 14px', background: dark ? 'rgba(255,255,255,.02)' : 'rgba(0,0,0,.02)', borderRadius: 8 }}>💬 {sub.feedback}</div>}
                 </div>
               ) : !over ? (
-                <Btn size="sm" onClick={() => { setForm({ id: a.id, link: '', text: '' }); setModal('sub') }}>📤 Submit</Btn>
+                <Btn size="sm" onClick={() => { setForm({ id: a.id, link: '', text: '' }); setUploadedFiles([]); setModal('sub') }}>📤 Submit</Btn>
               ) : (
                 <div style={{ fontSize: 12, color: '#EF4444', fontWeight: 600 }}>⚠️ Deadline passed</div>
               )}
@@ -2376,13 +2449,46 @@ function StudentAssignmentsPage() {
         })}
       </Card>
 
-      <Modal open={modal === 'sub'} onClose={() => setModal(null)} title="📤 Submit" icon="📤"
-        footer={<><Btn type="ghost" onClick={() => setModal(null)}>Cancel</Btn><Btn onClick={submit}>📤 Submit</Btn></>}>
-        <Inp label="Link" placeholder="Drive, Canva..." value={form.link || ''} onChange={e => setForm({ ...form, link: e.target.value })} />
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '4px 0 18px' }}><div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,.05)' }} /><span style={{ fontSize: 11, color: '#4B5563' }}>OR UPLOAD</span><div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,.05)' }} /></div>
-        <FileUp label="File" accept="*" uploading={uploading} onUpload={handleFile} />
-        {form.link && !uploading && <div style={{ ...getGlassLight(dark), borderRadius: 10, padding: 12, marginBottom: 14, fontSize: 12, color: '#10B981' }}>✅ Ready: {form.link?.substring(0, 50)}...</div>}
-        <TA label="Notes" onChange={e => setForm({ ...form, text: e.target.value })} />
+      <Modal open={modal === 'sub'} onClose={() => { setModal(null); setUploadedFiles([]) }} title="📤 Submit Assignment" icon="📤"
+        footer={<><Btn type="ghost" onClick={() => { setModal(null); setUploadedFiles([]) }}>Cancel</Btn><Btn onClick={submit} disabled={uploading}>📤 Submit</Btn></>}>
+        <Inp label="Link (optional)" placeholder="Drive, Canva, Figma link..." value={form.link || ''} onChange={e => setForm({ ...form, link: e.target.value })} />
+        
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '4px 0 18px' }}>
+          <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,.05)' }} />
+          <span style={{ fontSize: 11, color: '#4B5563' }}>AND/OR UPLOAD FILES</span>
+          <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,.05)' }} />
+        </div>
+        
+        {/* Multiple file upload */}
+        <div style={{ marginBottom: 18 }}>
+          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 9 }}>Upload Files (multiple allowed)</label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '20px 22px', background: dark ? 'rgba(0,0,0,.25)' : '#FAFAFA', border: `1.5px dashed ${dark ? 'rgba(255,215,0,.15)' : 'rgba(255,215,0,.3)'}`, borderRadius: 16, cursor: uploading ? 'not-allowed' : 'pointer', transition: 'all .3s' }}>
+            <div style={{ width: 48, height: 48, borderRadius: 14, background: 'rgba(255,215,0,.06)', border: '1px solid rgba(255,215,0,.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>{uploading ? '⏳' : '📎'}</div>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: dark ? '#D1D5DB' : '#374151' }}>{uploading ? 'Uploading...' : 'Click to select files'}</div>
+              <div style={{ fontSize: 12, color: '#4B5563', marginTop: 3 }}>Images, PDFs, ZIPs — multiple files allowed</div>
+            </div>
+            <input type="file" accept="*" multiple style={{ display: 'none' }} onChange={handleFiles} disabled={uploading} />
+          </label>
+        </div>
+        
+        {/* Uploaded files list */}
+        {uploadedFiles.length > 0 && (
+          <div style={{ marginBottom: 18 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#10B981', marginBottom: 10 }}>✅ {uploadedFiles.length} file(s) ready</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {uploadedFiles.map((f, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, ...getGlassLight(dark), borderRadius: 10, padding: '10px 14px' }}>
+                  <span style={{ fontSize: 16 }}>📄</span>
+                  <span style={{ flex: 1, fontSize: 12, color: dark ? '#D1D5DB' : '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
+                  <button onClick={() => removeFile(i)} style={{ background: 'rgba(239,68,68,.1)', border: 'none', color: '#EF4444', width: 24, height: 24, borderRadius: 6, cursor: 'pointer', fontSize: 12 }}>✕</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        
+        <TA label="Notes (optional)" placeholder="Any additional notes..." value={form.text || ''} onChange={e => setForm({ ...form, text: e.target.value })} />
       </Modal>
     </>
   )
