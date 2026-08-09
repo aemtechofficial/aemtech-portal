@@ -2049,117 +2049,85 @@ function AttendancePage(){const[batches,setBatches]=useState([]);const[classes,s
 
 function AssignmentsPage(){const[assignments,setAssignments]=useState([]);const[batches,setBatches]=useState([]);const[classes,setClasses]=useState([]);const[loading,setLoading]=useState(true);const[modal,setModal]=useState(false);const[form,setForm]=useState({});const[filters,setFilters]=useState({});const load=useCallback(async()=>{setLoading(true);const[a,b,c]=await Promise.all([sb.from('assignments').select('*').order('created_at',{ascending:false}),sb.from('batches').select('*'),sb.from('classes').select('*').order('class_number')]);setAssignments(a.data||[]);setBatches(b.data||[]);setClasses(c.data||[]);setLoading(false)},[]);useEffect(()=>{load()},[load]);const save=async()=>{if(!form.title||!form.batch_id||!form.due_date){toast.error('Required');return};await sb.from('assignments').insert({...form,total_marks:parseInt(form.total_marks)||100});toast.success('Created!');setModal(false);load()};const del=async id=>{if(!confirm('Delete?'))return;await sb.from('submissions').delete().eq('assignment_id',id);await sb.from('assignments').delete().eq('id',id);toast.success('Deleted');load()};const filtered=assignments.filter(a=>{if(filters.batch&&a.batch_id!==filters.batch)return false;return true});if(loading)return <SkeletonDashboard/>;return(<><FilterBar filters={[{key:'batch',label:'Batch',options:batches.map(b=>({value:b.id,label:b.name}))}]} values={filters} onChange={setFilters}/><Card title={`Assignments (${filtered.length})`} icon="📝" action={<div style={{display:'flex',gap:10}}><Btn type="outline" size="sm" icon="📊" onClick={()=>openSheet('assignments')}>Sheet</Btn><Btn onClick={()=>{setForm({total_marks:100});setModal(true)}} icon="➕">Create</Btn></div>} noPadding><Tbl headers={['Title','Batch','Class','Due','Marks','Actions']} empty={filtered.length===0?<Empty icon="📝" title="No assignments"/>:null}>{filtered.map((a,i)=>(<TR key={a.id} delay={i*.04}><TD style={{fontWeight:600,color:'#E5E7EB'}}>{a.title}</TD><TD style={{fontSize:12}}>{batches.find(b=>b.id===a.batch_id)?.name||'—'}</TD><TD style={{fontSize:12}}>{classes.find(c=>c.id===a.class_id)?'C'+classes.find(c=>c.id===a.class_id)?.class_number:'—'}</TD><TD style={{fontSize:12}}>{fmtDT(a.due_date)}</TD><TD><Bdg type="gold">{a.total_marks}pts</Bdg></TD><TD><Btn type="danger" size="xs" onClick={()=>del(a.id)}>🗑</Btn></TD></TR>))}</Tbl></Card><Modal open={modal} onClose={()=>setModal(false)} title="Create Assignment" icon="📝" footer={<><Btn type="ghost" onClick={()=>setModal(false)}>Cancel</Btn><Btn onClick={save}>Create</Btn></>}><Inp label="Title" required onChange={e=>setForm({...form,title:e.target.value})}/><TA label="Description" onChange={e=>setForm({...form,description:e.target.value})}/><Grid><Sel label="Batch" required onChange={e=>setForm({...form,batch_id:e.target.value})}><option value="">Select</option>{batches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</Sel><Sel label="Class" onChange={e=>setForm({...form,class_id:e.target.value})}><option value="">Select</option>{classes.map(c=><option key={c.id} value={c.id}>C{c.class_number}</option>)}</Sel><Inp label="Due" required type="datetime-local" onChange={e=>setForm({...form,due_date:e.target.value})}/><Inp label="Marks" type="number" value={form.total_marks||100} onChange={e=>setForm({...form,total_marks:e.target.value})}/></Grid></Modal></>)}
 
-function SubmissionsPage() {
-  const [subs, setSubs] = useState([])
-  const [students, setStudents] = useState([])
-  const [assignments, setAssignments] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [modal, setModal] = useState(null)
-  const [form, setForm] = useState({})
-  const [filter, setFilter] = useState('all')
-  const { dark } = useTheme()
+function SubmissionsPage(){
+  const[subs,setSubs]=useState([]);const[students,setStudents]=useState([]);const[assignments,setAssignments]=useState([]);const[loading,setLoading]=useState(true);const[modal,setModal]=useState(null);const[form,setForm]=useState({});const[filter,setFilter]=useState('all')
   const { confirm } = useConfirm()
-
-  const parseLinks = link => {
-    if (!link) return []
-    try {
-      const parsed = JSON.parse(link)
-      return Array.isArray(parsed) ? parsed : [link]
-    } catch { return [link] }
-  }
-
-  const load = useCallback(async () => {
-    setLoading(true)
-    const [s, st, a] = await Promise.all([
-      sb.from('submissions').select('*').order('submitted_at', { ascending: false }),
-      sb.from('students').select('*'),
-      sb.from('assignments').select('*')
-    ])
-    setSubs(s.data || [])
-    setStudents(st.data || [])
-    setAssignments(a.data || [])
-    setLoading(false)
-  }, [])
-  useEffect(() => { load() }, [load])
-
-  const saveGrade = async () => {
-    const marks = form.marks === '' ? null : parseFloat(form.marks)
-    const { error } = await sb.from('submissions').update({
-      marks_obtained: marks,
-      feedback: form.feedback,
-      status: marks == null ? 'submitted' : 'graded'
-    }).eq('id', form.id)
-    if (error) { toast.error(error.message); return }
-    toast.success('Grade saved! ✅')
-    setModal(null)
-    load()
-  }
-
-  const deleteSubmission = async submission => {
-    const student = students.find(s => s.id === submission.student_id)
-    const assignment = assignments.find(a => a.id === submission.assignment_id)
-    const ok = await confirm({
-      title: 'Delete Submission?',
-      message: `${student?.full_name || 'Student'} ki “${assignment?.title || 'assignment'}” submission permanently delete ho jayegi.`,
-      confirmText: 'Delete',
-      icon: '🗑️'
-    })
+  const { dark } = useTheme()
+  
+  const load=useCallback(async()=>{setLoading(true);const[s,st,a]=await Promise.all([sb.from('submissions').select('*').order('submitted_at',{ascending:false}),sb.from('students').select('*'),sb.from('assignments').select('*')]);setSubs(s.data||[]);setStudents(st.data||[]);setAssignments(a.data||[]);setLoading(false)},[])
+  useEffect(()=>{load()},[load])
+  
+  const saveGrade=async()=>{await sb.from('submissions').update({marks_obtained:parseFloat(form.marks),feedback:form.feedback,status:'graded'}).eq('id',form.id);toast.success('Graded! ✅');setModal(null);load()}
+  
+  const deleteSubmission = async (id, studentName) => {
+    const ok = await confirm({ title: 'Delete Submission?', message: `Delete submission by ${studentName}? This cannot be undone.`, type: 'danger', confirmText: 'Delete', icon: '🗑️' })
     if (!ok) return
-    const { error } = await sb.from('submissions').delete().eq('id', submission.id)
-    if (error) { toast.error(error.message); return }
-    toast.success('Submission deleted')
-    if (form.id === submission.id) setModal(null)
+    await sb.from('submissions').delete().eq('id', id)
+    toast.success('Submission deleted!')
     load()
   }
-
-  const filtered = filter === 'all' ? subs : filter === 'pending' ? subs.filter(s => s.marks_obtained == null) : subs.filter(s => s.marks_obtained != null)
-  if (loading) return <SkeletonDashboard />
-
-  return (
-    <>
-      <Card title={`Submissions (${subs.length})`} icon="📤" action={
-        <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
-          <select value={filter} onChange={e => setFilter(e.target.value)} style={{ background:dark?'#0A0A0B':'#fff', border:`1px solid ${dark?'rgba(255,255,255,.06)':'rgba(0,0,0,.08)'}`, color:dark?'#E5E7EB':'#1F2937', padding:'9px 14px', borderRadius:11, fontSize:12, fontFamily:"'Inter',sans-serif", outline:'none' }}>
-            <option value="all">All</option><option value="pending">Pending</option><option value="graded">Graded</option>
-          </select>
-          <Btn type="success" size="sm" onClick={() => exportXLS(subs.map(s => ({ Student:students.find(x=>x.id===s.student_id)?.full_name||'', Assignment:assignments.find(x=>x.id===s.assignment_id)?.title||'', Marks:s.marks_obtained??'', Status:s.status })), 'Submissions.xlsx')} icon="📊">Export</Btn>
-          <Btn type="outline" size="sm" icon="📊" onClick={() => openSheet('submissions')}>Sheet</Btn>
+  
+  // Parse multiple links
+  const parseLinks = (link) => {
+    if (!link) return []
+    try { const parsed = JSON.parse(link); return Array.isArray(parsed) ? parsed : [link] } catch { return [link] }
+  }
+  
+  const filtered=filter==='all'?subs:filter==='pending'?subs.filter(s=>s.marks_obtained==null):subs.filter(s=>s.marks_obtained!=null)
+  
+  if(loading)return <SkeletonDashboard/>
+  
+  return(<>
+    <Card title={`Submissions (${subs.length})`} icon="📤" action={<div style={{display:'flex',gap:10}}><select value={filter} onChange={e=>setFilter(e.target.value)} style={{background:'#0A0A0B',border:'1px solid rgba(255,255,255,.06)',color:'#E5E7EB',padding:'9px 14px',borderRadius:11,fontSize:12,fontFamily:"'Inter',sans-serif",outline:'none'}}><option value="all">All</option><option value="pending">Pending</option><option value="graded">Graded</option></select><Btn type="success" size="sm" onClick={()=>exportXLS(subs.map(s=>({Student:students.find(x=>x.id===s.student_id)?.full_name||'',Assignment:assignments.find(x=>x.id===s.assignment_id)?.title||'',Marks:s.marks_obtained||'',Status:s.status})),'Submissions.xlsx')} icon="📊">Export</Btn><Btn type="outline" size="sm" icon="📊" onClick={()=>openSheet('submissions')}>Sheet</Btn></div>} noPadding>
+      <Tbl headers={['Student','Assignment','Submitted','Files','Marks','Status','Actions']} empty={filtered.length===0?<Empty icon="📤" title="No submissions"/>:null}>
+        {filtered.map((s,i)=>{
+          const st=students.find(x=>x.id===s.student_id)
+          const a=assignments.find(x=>x.id===s.assignment_id)
+          const links = parseLinks(s.submission_link)
+          return(
+            <TR key={s.id} delay={i*.04}>
+              <TD><div style={{display:'flex',alignItems:'center',gap:8}}><Av name={st?.full_name||'?'} size={32}/><span style={{fontWeight:600,fontSize:13,color:dark?'#E5E7EB':'#1F2937'}}>{st?.full_name||'—'}</span></div></TD>
+              <TD style={{fontSize:12}}>{a?.title||'—'}</TD>
+              <TD style={{fontSize:12}}>{fmtDT(s.submitted_at)}</TD>
+              <TD>
+                {links.length > 0 ? (
+                  <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
+                    {links.map((link,li)=>(
+                      <a key={li} href={link} target="_blank" rel="noreferrer" style={{display:'inline-flex',alignItems:'center',fontSize:10,color:'#FFD700',background:'rgba(255,215,0,.08)',padding:'4px 8px',borderRadius:6,textDecoration:'none'}}>📎{links.length>1?li+1:''}</a>
+                    ))}
+                  </div>
+                ) : '—'}
+              </TD>
+              <TD>{s.marks_obtained!=null?<span style={{fontWeight:800,color:'#FFD700'}}>{s.marks_obtained}/{a?.total_marks||100}</span>:'—'}</TD>
+              <TD><Bdg type={s.marks_obtained!=null?'success':'warning'} dot>{s.marks_obtained!=null?'Graded':'Pending'}</Bdg></TD>
+              <TD>
+                <div style={{display:'flex',gap:6}}>
+                  <Btn type="outline" size="xs" onClick={()=>{setForm({id:s.id,marks:s.marks_obtained||'',feedback:s.feedback||'',links,text:s.submission_text,total:a?.total_marks||100});setModal('grade')}}>✏️</Btn>
+                  <Btn type="danger" size="xs" onClick={()=>deleteSubmission(s.id,st?.full_name||'Student')}>🗑️</Btn>
+                </div>
+              </TD>
+            </TR>
+          )
+        })}
+      </Tbl>
+    </Card>
+    
+    <Modal open={modal==='grade'} onClose={()=>setModal(null)} title="Grade Submission" icon="✏️" footer={<><Btn type="ghost" onClick={()=>setModal(null)}>Cancel</Btn><Btn onClick={saveGrade}>💾 Save</Btn></>}>
+      {form.links?.length > 0 && (
+        <div style={{marginBottom:18}}>
+          <div style={{fontSize:11,fontWeight:700,color:'#6B7280',marginBottom:8}}>SUBMITTED FILES</div>
+          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+            {form.links.map((link,i)=>(
+              <a key={i} href={link} target="_blank" rel="noreferrer"><Btn type="outline" size="sm">📎 File {form.links.length>1?i+1:''}</Btn></a>
+            ))}
+          </div>
         </div>
-      } noPadding>
-        <Tbl headers={['Student','Assignment','Submitted','Files','Marks','Status','Actions']} empty={filtered.length===0?<Empty icon="📤" title="No submissions"/>:null}>
-          {filtered.map((s, i) => {
-            const st = students.find(x => x.id === s.student_id)
-            const a = assignments.find(x => x.id === s.assignment_id)
-            const links = parseLinks(s.submission_link)
-            return (
-              <TR key={s.id} delay={i*.04}>
-                <TD><div style={{display:'flex',alignItems:'center',gap:8}}><Av name={st?.full_name||'?'} size={32}/><span style={{fontWeight:600,fontSize:13,color:dark?'#E5E7EB':'#1F2937'}}>{st?.full_name||'—'}</span></div></TD>
-                <TD style={{fontSize:12}}>{a?.title||'—'}</TD>
-                <TD style={{fontSize:12}}>{fmtDT(s.submitted_at)}</TD>
-                <TD>{links.length ? <div style={{display:'flex',gap:5}}>{links.slice(0,3).map((link,idx)=><a key={idx} href={link} target="_blank" rel="noreferrer" style={{color:'#FFD700',fontSize:11,textDecoration:'none'}}>📎{idx+1}</a>)}{links.length>3&&<span style={{fontSize:10,color:'#6B7280'}}>+{links.length-3}</span>}</div>:'—'}</TD>
-                <TD>{s.marks_obtained!=null?<span style={{fontWeight:800,color:'#FFD700'}}>{s.marks_obtained}/{a?.total_marks||100}</span>:'—'}</TD>
-                <TD><Bdg type={s.marks_obtained!=null?'success':'warning'} dot>{s.marks_obtained!=null?'Graded':'Pending'}</Bdg></TD>
-                <TD><div style={{display:'flex',gap:6}}>
-                  <Btn type="outline" size="xs" onClick={()=>{setForm({id:s.id,marks:s.marks_obtained??'',feedback:s.feedback||'',link:s.submission_link,text:s.submission_text,total:a?.total_marks||100,submission:s});setModal('grade')}}>✏️</Btn>
-                  <Btn type="danger" size="xs" onClick={()=>deleteSubmission(s)}>🗑</Btn>
-                </div></TD>
-              </TR>
-            )
-          })}
-        </Tbl>
-      </Card>
-
-      <Modal open={modal==='grade'} onClose={()=>setModal(null)} title="Grade Submission" icon="✏️" footer={<><Btn type="danger" onClick={()=>form.submission&&deleteSubmission(form.submission)}>🗑 Delete</Btn><div style={{flex:1}}/><Btn type="ghost" onClick={()=>setModal(null)}>Cancel</Btn><Btn onClick={saveGrade}>💾 Save</Btn></>}>
-        {parseLinks(form.link).length>0&&<div style={{marginBottom:18}}>
-          <div style={{fontSize:11,fontWeight:700,color:'#6B7280',textTransform:'uppercase',letterSpacing:1.2,marginBottom:9}}>Submitted Files</div>
-          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>{parseLinks(form.link).map((link,i)=><a key={i} href={link} target="_blank" rel="noreferrer" style={{textDecoration:'none'}}><Btn type="outline" size="sm">📎 File {i+1}</Btn></a>)}</div>
-        </div>}
-        {form.text&&<div style={{...getGlassLight(dark),borderRadius:12,padding:14,marginBottom:16,fontSize:12,color:'#9CA3AF'}}>📝 {form.text}</div>}
-        <Inp label={`Marks (/${form.total})`} type="number" value={form.marks} onChange={e=>setForm({...form,marks:e.target.value})}/>
-        <TA label="Feedback" value={form.feedback} onChange={e=>setForm({...form,feedback:e.target.value})}/>
-      </Modal>
-    </>
-  )
+      )}
+      {form.text && <div style={{...getGlassLight(dark),borderRadius:10,padding:14,marginBottom:18,fontSize:12,color:'#9CA3AF'}}>📝 {form.text}</div>}
+      <Inp label={`Marks (out of ${form.total})`} type="number" value={form.marks} onChange={e=>setForm({...form,marks:e.target.value})}/>
+      <TA label="Feedback" value={form.feedback} onChange={e=>setForm({...form,feedback:e.target.value})} placeholder="Great work! / Needs improvement..."/>
+    </Modal>
+  </>)
 }
 
 function RecordingsPage(){const[classes,setClasses]=useState([]);const[batches,setBatches]=useState([]);const[loading,setLoading]=useState(true);const[modal,setModal]=useState(null);const[form,setForm]=useState({});const[uploading,setUploading]=useState(false);const[filterBatch,setFilterBatch]=useState('');const{dark}=useTheme();const load=useCallback(async()=>{setLoading(true);const[c,b]=await Promise.all([sb.from('classes').select('*').order('class_number'),sb.from('batches').select('*')]);setClasses(c.data||[]);setBatches(b.data||[]);setLoading(false)},[]);useEffect(()=>{load()},[load]);const handleFile=async e=>{const file=e.target.files[0];if(!file)return;setUploading(true);try{const ext=file.name.split('.').pop();const url=await uploadFile(file,'recordings',`recordings/c${form.class_number||'x'}-${Date.now()}.${ext}`);setForm(f=>({...f,recording_url:url}));toast.success('Uploaded!')}catch{toast.error('Failed')}finally{setUploading(false);e.target.value=''}};const save=async()=>{if(!form.recording_url){toast.error('Add URL');return};await sb.from('classes').update({recording_url:form.recording_url,notes:form.notes,status:'completed'}).eq('id',form.id);toast.success('Saved!');setModal(null);load()};const filtered=filterBatch?classes.filter(c=>c.batch_id===filterBatch):classes;if(loading)return <SkeletonDashboard/>;return(<><Card title={`Recordings (${classes.filter(c=>c.recording_url).length}/${classes.length})`} icon="🎥" action={<select value={filterBatch} onChange={e=>setFilterBatch(e.target.value)} style={{background:'#0A0A0B',border:'1px solid rgba(255,255,255,.06)',color:'#E5E7EB',padding:'9px 14px',borderRadius:11,fontSize:12,fontFamily:"'Inter',sans-serif",outline:'none'}}><option value="">All</option>{batches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select>}>{filtered.map(c=>(<div key={c.id} className="ch" style={{display:'flex',alignItems:'center',gap:16,...getGlassLight(dark),borderRadius:14,padding:20,marginBottom:12}}><div style={{width:54,height:54,background:c.recording_url?'rgba(16,185,129,.08)':'rgba(255,215,0,.04)',borderRadius:14,display:'flex',alignItems:'center',justifyContent:'center',fontSize:24,flexShrink:0}}>{c.recording_url?'▶️':'📅'}</div><div style={{flex:1}}><div style={{fontSize:15,fontWeight:700,color:dark?'#E5E7EB':'#1F2937'}}>C{c.class_number} — {c.title}</div><div style={{fontSize:12,color:'#6B7280'}}>{batches.find(b=>b.id===c.batch_id)?.name||'—'} · {fmtDate(c.date)}</div></div><div style={{display:'flex',gap:8}}>{c.recording_url&&<a href={c.recording_url} target="_blank" rel="noreferrer" style={{background:G,color:'#000',padding:'8px 16px',borderRadius:10,fontSize:12,fontWeight:700,textDecoration:'none'}}>▶</a>}<Btn type="outline" size="sm" onClick={()=>{setForm({id:c.id,class_number:c.class_number,recording_url:c.recording_url||'',notes:c.notes||''});setModal('edit')}}>{c.recording_url?'✏️':'➕'}</Btn></div></div>))}{filtered.length===0&&<Empty icon="🎥" title="No classes"/>}</Card><Modal open={modal==='edit'} onClose={()=>setModal(null)} title="Recording" icon="🎥" footer={<><Btn type="ghost" onClick={()=>setModal(null)}>Cancel</Btn><Btn onClick={save}>💾 Save</Btn></>}><Inp label="URL" value={form.recording_url||''} onChange={e=>setForm({...form,recording_url:e.target.value})}/><div style={{display:'flex',alignItems:'center',gap:12,margin:'4px 0 22px'}}><div style={{flex:1,height:1,background:'rgba(255,255,255,.05)'}}/><span style={{fontSize:11,color:'#4B5563',fontWeight:700}}>OR UPLOAD</span><div style={{flex:1,height:1,background:'rgba(255,255,255,.05)'}}/></div><FileUp label="Video" accept="video/*,.mp4,.mov" uploading={uploading} onUpload={handleFile}/><TA label="Notes" value={form.notes||''} onChange={e=>setForm({...form,notes:e.target.value})}/></Modal></>)}
@@ -2296,7 +2264,7 @@ function StudentDashboard() {
           <div>
             <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 24, fontWeight: 700, marginBottom: 5, color: dark ? '#E5E7EB' : '#1F2937' }}>{greet()}, {user?.full_name?.split(' ')[0]}! 👋</div>
             <div style={{ fontSize: 13, color: '#6B7280' }}>{user?.email} · {user?.city || 'Pakistan'}</div>
-            {user?.father_name && <div style={{ fontSize: 12, color: '#4B5563', marginTop: 3 }}>S/O {user.father_name}</div>}
+            
           </div>
         </div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', position: 'relative', zIndex: 1 }}>
@@ -2459,15 +2427,16 @@ function StudentAttendancePage() {
 // ═══════════════════════════════════════
 function StudentAssignmentsPage() {
   const { user } = useAuth(); const { dark } = useTheme()
-  const { confirm } = useConfirm()
   const [assignments, setAssignments] = useState([]); const [subMap, setSubMap] = useState({}); const [loading, setLoading] = useState(true); const [modal, setModal] = useState(null); const [form, setForm] = useState({}); const [uploading, setUploading] = useState(false)
   const [uploadedFiles, setUploadedFiles] = useState([])
+  const [editMode, setEditMode] = useState(false) // Edit mode flag
+  const { confirm } = useConfirm()
   
   const load = useCallback(async () => { if (!user) return; setLoading(true); const [a, s] = await Promise.all([sb.from('assignments').select('*').eq('batch_id', user.batch_id || '').order('due_date'), sb.from('submissions').select('*').eq('student_id', user.id)]); const map = {}; (s.data || []).forEach(x => map[x.assignment_id] = x); setAssignments(a.data || []); setSubMap(map); setLoading(false) }, [user])
   useEffect(() => { load() }, [load])
   
-  // One file per selection; students can click again to add another file.
-  const handleFiles = async e => {
+  // Single file upload - one at a time, accumulates
+  const handleFile = async e => { 
     const file = e.target.files?.[0]
     if (!file) return
     setUploading(true)
@@ -2475,70 +2444,65 @@ function StudentAssignmentsPage() {
       const ext = file.name.split('.').pop()
       const url = await uploadFile(file, 'recordings', `submissions/${user.id}-${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`)
       setUploadedFiles(prev => [...prev, { name: file.name, url }])
-      toast.success('File added! Ab doosri file bhi add kar sakte hain 📎')
-    } catch { toast.error('Upload failed') }
-    finally { setUploading(false); e.target.value = '' }
+      toast.success(`📎 ${file.name} uploaded!`)
+    } catch { toast.error('Upload failed') } 
+    finally { setUploading(false); e.target.value = '' } 
   }
-
-  const removeFile = idx => setUploadedFiles(prev => prev.filter((_, i) => i !== idx))
-
-  const submit = async () => {
+  
+  const removeFile = (idx) => setUploadedFiles(prev => prev.filter((_, i) => i !== idx))
+  
+  const submit = async () => { 
     const allLinks = []
-    if (form.link?.trim()) allLinks.push(form.link.trim())
+    if (form.link) allLinks.push(form.link)
     uploadedFiles.forEach(f => allLinks.push(f.url))
-    if (allLinks.length === 0 && !form.text?.trim()) { toast.error('Add link, file, or note'); return }
-
-    const submissionLink = allLinks.length === 0 ? null : allLinks.length === 1 ? allLinks[0] : JSON.stringify(allLinks)
-    const payload = {
-      assignment_id: form.assignmentId,
-      student_id: user.id,
-      submission_link: submissionLink,
-      submission_text: form.text?.trim() || null,
-      status: 'submitted'
+    
+    if (allLinks.length === 0 && !form.text) { toast.error('Add link, files, or note'); return }
+    
+    const submissionLink = allLinks.length === 1 ? allLinks[0] : JSON.stringify(allLinks)
+    
+    if (editMode && form.subId) {
+      // Update existing submission
+      await sb.from('submissions').update({ 
+        submission_link: submissionLink, 
+        submission_text: form.text,
+        submitted_at: new Date().toISOString()
+      }).eq('id', form.subId)
+      toast.success('Updated! ✅')
+    } else {
+      // New submission
+      await sb.from('submissions').insert({ 
+        assignment_id: form.id, 
+        student_id: user.id, 
+        submission_link: submissionLink, 
+        submission_text: form.text, 
+        status: 'submitted' 
+      })
+      toast.success('Submitted! 🎉')
     }
-
-    const result = form.submissionId
-      ? await sb.from('submissions').update({ ...payload, marks_obtained: null, feedback: null, submitted_at: new Date().toISOString() }).eq('id', form.submissionId).eq('student_id', user.id)
-      : await sb.from('submissions').insert(payload)
-
-    if (result.error) { toast.error(result.error.message); return }
-    toast.success(form.submissionId ? 'Submission updated! Admin dobara review karega ✅' : 'Submitted! 🎉')
     setModal(null)
     setUploadedFiles([])
-    setForm({})
-    load()
+    setEditMode(false)
+    load() 
   }
-
-  const openNewSubmission = assignment => {
-    setForm({ assignmentId: assignment.id, link: '', text: '', assignmentTitle: assignment.title })
-    setUploadedFiles([])
-    setModal('sub')
-  }
-
-  const openEditSubmission = (assignment, submission) => {
-    setForm({ assignmentId: assignment.id, submissionId: submission.id, link: '', text: submission.submission_text || '', assignmentTitle: assignment.title })
-    setUploadedFiles(parseLinks(submission.submission_link).map((url, i) => ({ name: `Existing file ${i + 1}`, url })))
-    setModal('sub')
-  }
-
-  const deleteSubmission = async (assignment, submission) => {
-    const ok = await confirm({
-      title: 'Delete Submission?',
-      message: `“${assignment.title}” ki submission delete ho jayegi. Aap deadline se pehle dobara submit kar sakte hain.`,
-      confirmText: 'Delete',
-      icon: '🗑️'
-    })
+  
+  const deleteSubmission = async (subId) => {
+    const ok = await confirm({ title: 'Delete Submission?', message: 'Kya aap yeh submission delete karna chahte hain? Yeh action undo nahi ho sakta.', type: 'danger', confirmText: 'Delete', icon: '🗑️' })
     if (!ok) return
-    const { error } = await sb.from('submissions').delete().eq('id', submission.id).eq('student_id', user.id)
-    if (error) { toast.error(error.message); return }
-    toast.success('Submission deleted')
-    setModal(null)
-    setUploadedFiles([])
-    setForm({})
+    await sb.from('submissions').delete().eq('id', subId)
+    toast.success('Submission deleted! 🗑️')
     load()
   }
   
-  // Parse submission links (handle both single and multiple)
+  const editSubmission = (assignment, sub) => {
+    const links = parseLinks(sub.submission_link)
+    // Set existing files
+    const existingFiles = links.map((url, i) => ({ name: `File ${i + 1}`, url }))
+    setUploadedFiles(existingFiles)
+    setForm({ id: assignment.id, subId: sub.id, link: '', text: sub.submission_text || '' })
+    setEditMode(true)
+    setModal('sub')
+  }
+  
   const parseLinks = (link) => {
     if (!link) return []
     try { 
@@ -2566,7 +2530,13 @@ function StudentAssignmentsPage() {
               {a.description && <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 16, lineHeight: 1.7, background: dark ? 'rgba(255,255,255,.02)' : 'rgba(0,0,0,.02)', padding: 14, borderRadius: 10 }}>{a.description}</div>}
               {sub ? (
                 <div style={{ background: 'rgba(16,185,129,.04)', border: '1px solid rgba(16,185,129,.12)', borderRadius: 12, padding: 16 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: '#10B981', marginBottom: 8 }}>✅ Submitted — {fmtDT(sub.submitted_at)}</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#10B981' }}>✅ Submitted — {fmtDT(sub.submitted_at)}</div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <Btn type="outline" size="xs" onClick={() => editSubmission(a, sub)}>✏️ Edit</Btn>
+                      <Btn type="danger" size="xs" onClick={() => deleteSubmission(sub.id)}>🗑️</Btn>
+                    </div>
+                  </div>
                   {links.length > 0 && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
                       {links.map((link, i) => (
@@ -2576,16 +2546,12 @@ function StudentAssignmentsPage() {
                       ))}
                     </div>
                   )}
+                  {sub.submission_text && <div style={{ fontSize: 12, color: '#9CA3AF', marginBottom: 8, padding: '8px 12px', background: dark ? 'rgba(255,255,255,.02)' : 'rgba(0,0,0,.02)', borderRadius: 8 }}>📝 {sub.submission_text}</div>}
                   {sub.marks_obtained != null && <div style={{ fontWeight: 800, color: '#FFD700', fontSize: 18, marginTop: 10, fontFamily: "'Space Grotesk',sans-serif" }}>Marks: {sub.marks_obtained}/{a.total_marks}</div>}
                   {sub.feedback && <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 10, padding: '10px 14px', background: dark ? 'rgba(255,255,255,.02)' : 'rgba(0,0,0,.02)', borderRadius: 8 }}>💬 {sub.feedback}</div>}
-                  <div style={{ display:'flex', gap:8, marginTop:14, flexWrap:'wrap' }}>
-                    <Btn type="outline" size="sm" onClick={() => openEditSubmission(a, sub)}>✏️ Edit Submission</Btn>
-                    <Btn type="danger" size="sm" onClick={() => deleteSubmission(a, sub)}>🗑 Delete</Btn>
-                  </div>
-                  {sub.marks_obtained != null && <div style={{ fontSize:10, color:'#F59E0B', marginTop:8 }}>Editing will clear the current grade for re-review.</div>}
                 </div>
               ) : !over ? (
-                <Btn size="sm" onClick={() => openNewSubmission(a)}>📤 Submit</Btn>
+                <Btn size="sm" onClick={() => { setForm({ id: a.id, link: '', text: '' }); setUploadedFiles([]); setEditMode(false); setModal('sub') }}>📤 Submit</Btn>
               ) : (
                 <div style={{ fontSize: 12, color: '#EF4444', fontWeight: 600 }}>⚠️ Deadline passed</div>
               )}
@@ -2594,13 +2560,8 @@ function StudentAssignmentsPage() {
         })}
       </Card>
 
-      <Modal open={modal === 'sub'} onClose={() => { setModal(null); setUploadedFiles([]); setForm({}) }} title={form.submissionId ? `✏️ Edit — ${form.assignmentTitle || 'Assignment'}` : '📤 Submit Assignment'} icon={form.submissionId ? '✏️' : '📤'}
-        footer={<>
-          {form.submissionId && <Btn type="danger" onClick={() => { const assignment=assignments.find(a=>a.id===form.assignmentId); const submission=subMap[form.assignmentId]; if(assignment&&submission) deleteSubmission(assignment,submission) }}>🗑 Delete</Btn>}
-          <div style={{flex:1}} />
-          <Btn type="ghost" onClick={() => { setModal(null); setUploadedFiles([]); setForm({}) }}>Cancel</Btn>
-          <Btn onClick={submit} disabled={uploading}>{form.submissionId ? '💾 Save Changes' : '📤 Submit'}</Btn>
-        </>}>
+      <Modal open={modal === 'sub'} onClose={() => { setModal(null); setUploadedFiles([]); setEditMode(false) }} title={editMode ? "✏️ Edit Submission" : "📤 Submit Assignment"} icon={editMode ? "✏️" : "📤"}
+        footer={<><Btn type="ghost" onClick={() => { setModal(null); setUploadedFiles([]); setEditMode(false) }}>Cancel</Btn><Btn onClick={submit} disabled={uploading}>{editMode ? '💾 Update' : '📤 Submit'}</Btn></>}>
         <Inp label="Link (optional)" placeholder="Drive, Canva, Figma link..." value={form.link || ''} onChange={e => setForm({ ...form, link: e.target.value })} />
         
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '4px 0 18px' }}>
@@ -2609,28 +2570,29 @@ function StudentAssignmentsPage() {
           <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,.05)' }} />
         </div>
         
-        {/* One-at-a-time file upload; repeat to add more */}
+        {/* Single file upload - one at a time */}
         <div style={{ marginBottom: 18 }}>
-          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 9 }}>Add File</label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '20px 22px', background: dark ? 'rgba(0,0,0,.25)' : '#FAFAFA', border: `1.5px dashed ${dark ? 'rgba(255,215,0,.15)' : 'rgba(255,215,0,.3)'}`, borderRadius: 16, cursor: uploading ? 'not-allowed' : 'pointer', transition: 'all .3s' }}>
-            <div style={{ width: 48, height: 48, borderRadius: 14, background: 'rgba(255,215,0,.06)', border: '1px solid rgba(255,215,0,.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>{uploading ? '⏳' : '📎'}</div>
+          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 9 }}>Upload File</label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '16px 20px', background: dark ? 'rgba(0,0,0,.25)' : '#FAFAFA', border: `1.5px dashed ${dark ? 'rgba(255,215,0,.15)' : 'rgba(255,215,0,.3)'}`, borderRadius: 14, cursor: uploading ? 'not-allowed' : 'pointer', transition: 'all .3s' }}>
+            <div style={{ width: 42, height: 42, borderRadius: 12, background: 'rgba(255,215,0,.06)', border: '1px solid rgba(255,215,0,.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{uploading ? '⏳' : '➕'}</div>
             <div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: dark ? '#D1D5DB' : '#374151' }}>{uploading ? 'Uploading...' : uploadedFiles.length ? 'Add another file' : 'Choose one file'}</div>
-              <div style={{ fontSize: 12, color: '#4B5563', marginTop: 3 }}>Ek file select karein; upload ke baad dobara click karke next file add karein.</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: dark ? '#D1D5DB' : '#374151' }}>{uploading ? 'Uploading...' : 'Click to add a file'}</div>
+              <div style={{ fontSize: 11, color: '#4B5563', marginTop: 2 }}>Add one file at a time</div>
             </div>
-            <input type="file" accept="*" style={{ display: 'none' }} onChange={handleFiles} disabled={uploading} />
+            <input type="file" accept="*" style={{ display: 'none' }} onChange={handleFile} disabled={uploading} />
           </label>
         </div>
-
-        {/* Uploaded and existing files list */}
+        
+        {/* Uploaded files list */}
         {uploadedFiles.length > 0 && (
           <div style={{ marginBottom: 18 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#10B981', marginBottom: 10 }}>✅ {uploadedFiles.length} file(s) ready</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#10B981', marginBottom: 10 }}>📎 {uploadedFiles.length} file(s) attached</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {uploadedFiles.map((f, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, ...getGlassLight(dark), borderRadius: 10, padding: '10px 14px' }}>
                   <span style={{ fontSize: 16 }}>📄</span>
                   <span style={{ flex: 1, fontSize: 12, color: dark ? '#D1D5DB' : '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
+                  <a href={f.url} target="_blank" rel="noreferrer" style={{ color: '#FFD700', fontSize: 11 }}>🔗</a>
                   <button onClick={() => removeFile(i)} style={{ background: 'rgba(239,68,68,.1)', border: 'none', color: '#EF4444', width: 24, height: 24, borderRadius: 6, cursor: 'pointer', fontSize: 12 }}>✕</button>
                 </div>
               ))}
