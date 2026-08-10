@@ -2077,6 +2077,24 @@ function AssignmentsPage(){
     toast.success('Deleted');load()
   }
   
+  // Handle TXT file upload for description
+  const handleDescFile = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.name.endsWith('.txt')) { toast.error('Only .txt files allowed'); e.target.value=''; return }
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const text = ev.target?.result
+      if (text) {
+        setForm(f => ({ ...f, description: text }))
+        toast.success('📄 File loaded!')
+      }
+    }
+    reader.onerror = () => toast.error('Failed to read file')
+    reader.readAsText(file)
+    e.target.value = ''
+  }
+  
   const filtered=assignments.filter(a=>{if(filters.batch&&a.batch_id!==filters.batch)return false;return true})
   
   if(loading)return <SkeletonDashboard/>
@@ -2105,7 +2123,21 @@ function AssignmentsPage(){
     
     <Modal open={modal} onClose={()=>setModal(false)} title={form.id?'Edit Assignment':'Create Assignment'} icon="📝" footer={<><Btn type="ghost" onClick={()=>setModal(false)}>Cancel</Btn><Btn onClick={save}>{form.id?'💾 Update':'➕ Create'}</Btn></>}>
       <Inp label="Title" required value={form.title||''} onChange={e=>setForm({...form,title:e.target.value})}/>
-      <TA label="Description" value={form.description||''} onChange={e=>setForm({...form,description:e.target.value})}/>
+      
+      {/* Description with TXT upload option */}
+      <div style={{marginBottom:22}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:9}}>
+          <label style={{fontSize:11,fontWeight:700,color:'#6B7280',textTransform:'uppercase',letterSpacing:1.2}}>Description / Assignment Details</label>
+          <label style={{display:'inline-flex',alignItems:'center',gap:6,fontSize:11,color:'#FFD700',cursor:'pointer',padding:'4px 10px',background:'rgba(255,215,0,.06)',borderRadius:8,border:'1px solid rgba(255,215,0,.1)'}}>
+            📄 Upload .txt
+            <input type="file" accept=".txt" style={{display:'none'}} onChange={handleDescFile}/>
+          </label>
+        </div>
+        <textarea value={form.description||''} onChange={e=>setForm({...form,description:e.target.value})} placeholder="Assignment details likhein ya .txt file upload karein..." rows={6}
+          style={{width:'100%',background:dark?'rgba(0,0,0,.3)':'#FAFAFA',border:`1.5px solid ${dark?'rgba(255,255,255,.06)':'rgba(0,0,0,.1)'}`,color:dark?'#E5E7EB':'#1F2937',padding:'14px 18px',borderRadius:13,fontSize:14,outline:'none',fontFamily:"'Inter',sans-serif",resize:'vertical',minHeight:120}}/>
+        {form.description && <div style={{fontSize:10,color:'#4B5563',marginTop:6}}>{form.description.length} characters</div>}
+      </div>
+      
       <Grid>
         <Sel label="Batch" required value={form.batch_id||''} onChange={e=>setForm({...form,batch_id:e.target.value})}><option value="">Select</option>{batches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</Sel>
         <Sel label="Class" value={form.class_id||''} onChange={e=>setForm({...form,class_id:e.target.value})}><option value="">Select</option>{classes.map(c=><option key={c.id} value={c.id}>C{c.class_number}</option>)}</Sel>
@@ -2118,10 +2150,11 @@ function AssignmentsPage(){
 
 function SubmissionsPage(){
   const[subs,setSubs]=useState([]);const[students,setStudents]=useState([]);const[assignments,setAssignments]=useState([]);const[loading,setLoading]=useState(true);const[modal,setModal]=useState(null);const[form,setForm]=useState({});const[filter,setFilter]=useState('all')
+  const[assignmentFilter,setAssignmentFilter]=useState('all') // Assignment filter
   const { confirm } = useConfirm()
   const { dark } = useTheme()
   
-  const load=useCallback(async()=>{setLoading(true);const[s,st,a]=await Promise.all([sb.from('submissions').select('*').order('submitted_at',{ascending:false}),sb.from('students').select('*'),sb.from('assignments').select('*')]);setSubs(s.data||[]);setStudents(st.data||[]);setAssignments(a.data||[]);setLoading(false)},[])
+  const load=useCallback(async()=>{setLoading(true);const[s,st,a]=await Promise.all([sb.from('submissions').select('*').order('submitted_at',{ascending:false}),sb.from('students').select('*'),sb.from('assignments').select('*').order('created_at')]);setSubs(s.data||[]);setStudents(st.data||[]);setAssignments(a.data||[]);setLoading(false)},[])
   useEffect(()=>{load()},[load])
   
   const saveGrade=async()=>{await sb.from('submissions').update({marks_obtained:parseFloat(form.marks),feedback:form.feedback,status:'graded'}).eq('id',form.id);toast.success('Graded! ✅');setModal(null);load()}
@@ -2140,12 +2173,40 @@ function SubmissionsPage(){
     try { const parsed = JSON.parse(link); return Array.isArray(parsed) ? parsed : [link] } catch { return [link] }
   }
   
-  const filtered=filter==='all'?subs:filter==='pending'?subs.filter(s=>s.marks_obtained==null):subs.filter(s=>s.marks_obtained!=null)
+  // Apply both filters
+  let filtered = subs
+  if (assignmentFilter !== 'all') filtered = filtered.filter(s => s.assignment_id === assignmentFilter)
+  if (filter === 'pending') filtered = filtered.filter(s => s.marks_obtained == null)
+  else if (filter === 'graded') filtered = filtered.filter(s => s.marks_obtained != null)
+  
+  // Get selected assignment details
+  const selectedAssignment = assignmentFilter !== 'all' ? assignments.find(a => a.id === assignmentFilter) : null
   
   if(loading)return <SkeletonDashboard/>
   
   return(<>
-    <Card title={`Submissions (${subs.length})`} icon="📤" action={<div style={{display:'flex',gap:10}}><select value={filter} onChange={e=>setFilter(e.target.value)} style={{background:'#0A0A0B',border:'1px solid rgba(255,255,255,.06)',color:'#E5E7EB',padding:'9px 14px',borderRadius:11,fontSize:12,fontFamily:"'Inter',sans-serif",outline:'none'}}><option value="all">All</option><option value="pending">Pending</option><option value="graded">Graded</option></select><Btn type="success" size="sm" onClick={()=>exportXLS(subs.map(s=>({Student:students.find(x=>x.id===s.student_id)?.full_name||'',Assignment:assignments.find(x=>x.id===s.assignment_id)?.title||'',Marks:s.marks_obtained||'',Status:s.status})),'Submissions.xlsx')} icon="📊">Export</Btn><Btn type="outline" size="sm" icon="📊" onClick={()=>openSheet('submissions')}>Sheet</Btn></div>} noPadding>
+    {/* Assignment Filter Tabs */}
+    <div style={{display:'flex',gap:8,marginBottom:20,padding:6,...getGlass(dark),borderRadius:16,overflowX:'auto',flexWrap:'nowrap'}} className="cs">
+      <button onClick={()=>setAssignmentFilter('all')} style={{padding:'12px 20px',borderRadius:12,border:'none',cursor:'pointer',fontFamily:"'Inter',sans-serif",fontWeight:700,fontSize:12,transition:'all .3s',background:assignmentFilter==='all'?G:'transparent',color:assignmentFilter==='all'?'#000':'#6B7280',whiteSpace:'nowrap',flexShrink:0}}>📋 All ({subs.length})</button>
+      {assignments.map((a,i)=>{
+        const count=subs.filter(s=>s.assignment_id===a.id).length
+        return(
+          <button key={a.id} onClick={()=>setAssignmentFilter(a.id)} style={{padding:'12px 20px',borderRadius:12,border:'none',cursor:'pointer',fontFamily:"'Inter',sans-serif",fontWeight:700,fontSize:12,transition:'all .3s',background:assignmentFilter===a.id?G:'transparent',color:assignmentFilter===a.id?'#000':'#6B7280',whiteSpace:'nowrap',flexShrink:0}}>
+            📝 Assignment {i+1} ({count})
+          </button>
+        )
+      })}
+    </div>
+    
+    {/* Selected Assignment Info */}
+    {selectedAssignment && (
+      <div style={{...getGlassLight(dark),borderRadius:14,padding:'16px 20px',marginBottom:20,borderLeft:'4px solid #FFD700'}}>
+        <div style={{fontSize:16,fontWeight:700,color:dark?'#E5E7EB':'#1F2937',marginBottom:4}}>{selectedAssignment.title}</div>
+        <div style={{fontSize:12,color:'#6B7280'}}>Due: {fmtDT(selectedAssignment.due_date)} · {selectedAssignment.total_marks} marks · {filtered.length} submissions</div>
+      </div>
+    )}
+    
+    <Card title={selectedAssignment?`${selectedAssignment.title} (${filtered.length})`:`All Submissions (${filtered.length})`} icon="📤" action={<div style={{display:'flex',gap:10}}><select value={filter} onChange={e=>setFilter(e.target.value)} style={{background:dark?'#0A0A0B':'#fff',border:'1px solid rgba(255,255,255,.06)',color:dark?'#E5E7EB':'#1F2937',padding:'9px 14px',borderRadius:11,fontSize:12,fontFamily:"'Inter',sans-serif",outline:'none'}}><option value="all">All Status</option><option value="pending">Pending</option><option value="graded">Graded</option></select><Btn type="success" size="sm" onClick={()=>exportXLS(filtered.map(s=>({Student:students.find(x=>x.id===s.student_id)?.full_name||'',Assignment:assignments.find(x=>x.id===s.assignment_id)?.title||'',Marks:s.marks_obtained||'',Status:s.status})),'Submissions.xlsx')} icon="📊">Export</Btn><Btn type="outline" size="sm" icon="📊" onClick={()=>openSheet('submissions')}>Sheet</Btn></div>} noPadding>
       <Tbl headers={['Student','Assignment','Submitted','Files','Marks','Status','Actions']} empty={filtered.length===0?<Empty icon="📤" title="No submissions"/>:null}>
         {filtered.map((s,i)=>{
           const st=students.find(x=>x.id===s.student_id)
