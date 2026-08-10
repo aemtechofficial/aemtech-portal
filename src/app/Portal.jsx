@@ -2655,7 +2655,7 @@ function StudentAssignmentsPage() {
                 </div>
                 <Bdg type={sub ? 'success' : over ? 'danger' : 'warning'} dot>{sub ? 'Submitted' : over ? 'Overdue' : 'Pending'}</Bdg>
               </div>
-              {a.description && <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 16, lineHeight: 1.7, background: dark ? 'rgba(255,255,255,.02)' : 'rgba(0,0,0,.02)', padding: 14, borderRadius: 10 }}>{a.description}</div>}
+              {a.description && <button onClick={()=>{const blob=new Blob([a.description],{type:'text/plain'});const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download=`${(a.title||'Assignment').replace(/\s+/g,'_')}.txt`;link.click();URL.revokeObjectURL(url)}} style={{display:'inline-flex',alignItems:'center',gap:8,padding:'10px 18px',background:'rgba(255,215,0,.06)',border:'1px solid rgba(255,215,0,.12)',borderRadius:10,color:'#FFD700',fontSize:13,fontWeight:600,cursor:'pointer',fontFamily:"'Inter',sans-serif",marginBottom:16,transition:'all .3s'}}> 📄 Assignment Details (.txt)</button>}
               {sub ? (
                 <div style={{ background: 'rgba(16,185,129,.04)', border: '1px solid rgba(16,185,129,.12)', borderRadius: 12, padding: 16 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
