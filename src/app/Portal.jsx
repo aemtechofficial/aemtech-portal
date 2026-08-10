@@ -2048,7 +2048,73 @@ function ClassesPage(){const[classes,setClasses]=useState([]);const[batches,setB
 
 function AttendancePage(){const[batches,setBatches]=useState([]);const[classes,setClasses]=useState([]);const[students,setStudents]=useState([]);const[att,setAtt]=useState({});const[selB,setSelB]=useState('');const[selC,setSelC]=useState('');const[repB,setRepB]=useState('');const[report,setReport]=useState([]);const[saving,setSaving]=useState(false);const{dark}=useTheme();useEffect(()=>{sb.from('batches').select('*').then(r=>setBatches(r.data||[]))},[]);const loadC=async bid=>{setSelB(bid);setSelC('');setStudents([]);const{data}=await sb.from('classes').select('*').eq('batch_id',bid).order('class_number');setClasses(data||[])};const loadS=async cid=>{setSelC(cid);const[s,a]=await Promise.all([sb.from('students').select('*').eq('batch_id',selB).eq('status','active'),sb.from('attendance').select('*').eq('class_id',cid)]);const map={};(a.data||[]).forEach(x=>map[x.student_id]=x.status);const state={};(s.data||[]).forEach(x=>state[x.id]=map[x.id]||'absent');setStudents(s.data||[]);setAtt(state)};const toggle=id=>{const states=['present','absent','late'];setAtt(p=>({...p,[id]:states[(states.indexOf(p[id]||'absent')+1)%3]}))};const markAll=st=>{const n={};students.forEach(s=>n[s.id]=st);setAtt(n)};const save=async()=>{if(!selC)return;setSaving(true);await sb.from('attendance').delete().eq('class_id',selC);await sb.from('attendance').insert(students.map(s=>({class_id:selC,student_id:s.id,status:att[s.id]||'absent'})));toast.success('Saved!');const[allA,allS,allC]=await Promise.all([sb.from('attendance').select('*'),sb.from('students').select('*'),sb.from('classes').select('*')]);await syncToSheet('syncAttendance',{records:(allA.data||[]).map(a=>({student_name:allS.data?.find(s=>s.id===a.student_id)?.full_name||'',class_number:allC.data?.find(c=>c.id===a.class_id)?.class_number||'',class_title:allC.data?.find(c=>c.id===a.class_id)?.title||'',date:fmtDate(a.marked_at||new Date()),status:a.status}))});setSaving(false)};const loadReport=async bid=>{setRepB(bid);const[s,c]=await Promise.all([sb.from('students').select('*').eq('batch_id',bid),sb.from('classes').select('*').eq('batch_id',bid)]);const total=(c.data||[]).length;const rows=await Promise.all((s.data||[]).map(async st=>{const{data:a}=await sb.from('attendance').select('*').eq('student_id',st.id);const present=(a||[]).filter(x=>x.status==='present').length;return{...st,present,total,pct:total>0?Math.round((present/total)*100):0}}));setReport(rows)};const attColors={present:{border:'rgba(16,185,129,.4)',bg:'rgba(16,185,129,.05)',color:'#10B981'},absent:{border:'rgba(239,68,68,.4)',bg:'rgba(239,68,68,.05)',color:'#EF4444'},late:{border:'rgba(245,158,11,.4)',bg:'rgba(245,158,11,.05)',color:'#F59E0B'}};return(<div><Card title="✅ Mark Attendance" icon="✅" action={<Btn type="outline" size="sm" icon="📊" onClick={()=>openSheet('attendance')}>Sheet</Btn>}><Grid gap={18} style={{marginBottom:22}}><Sel label="Batch" value={selB} onChange={e=>loadC(e.target.value)}><option value="">Select</option>{batches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</Sel><Sel label="Class" value={selC} onChange={e=>loadS(e.target.value)}><option value="">Select</option>{classes.map(c=><option key={c.id} value={c.id}>C{c.class_number} — {c.title}</option>)}</Sel></Grid>{students.length>0&&<><div style={{display:'flex',gap:10,marginBottom:18}}><Btn type="success" size="sm" onClick={()=>markAll('present')}>✅ All Present</Btn><Btn type="danger" size="sm" onClick={()=>markAll('absent')}>❌ All Absent</Btn><Btn type="warning" size="sm" onClick={()=>markAll('late')}>⏰ Late</Btn></div><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(135px,1fr))',gap:12,marginBottom:22}}>{students.map(s=>{const st=att[s.id]||'absent';const c=attColors[st]||attColors.absent;return(<div key={s.id} onClick={()=>toggle(s.id)} style={{background:c.bg,border:`1.5px solid ${c.border}`,borderRadius:14,padding:16,textAlign:'center',cursor:'pointer',transition:tr}}><Av name={s.full_name} size={44}/><div style={{fontSize:12,fontWeight:700,marginTop:9,color:dark?'#E5E7EB':'#1F2937'}}>{s.full_name.split(' ')[0]}</div><div style={{fontSize:10,textTransform:'uppercase',letterSpacing:1.2,marginTop:5,color:c.color,fontWeight:700}}>{st}</div></div>)})}</div><Btn onClick={save} disabled={saving} loading={saving}>{saving?'Saving...':'💾 Save & Sync'}</Btn></>}</Card><Card title="📊 Report" icon="📊" action={report.length>0?<Btn type="success" size="sm" onClick={()=>exportXLS(report.map(s=>({Student:s.full_name,Present:s.present,Total:s.total,'%':s.pct+'%'})),'Attendance.xlsx')} icon="📊">Export</Btn>:null}><Sel label="Batch" value={repB} onChange={e=>loadReport(e.target.value)}><option value="">Select</option>{batches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</Sel>{report.length>0&&<Tbl headers={['Student','Present','Total','Attendance','Status']}>{report.map((s,i)=>(<TR key={s.id} delay={i*.04}><TD><div style={{display:'flex',alignItems:'center',gap:8}}><Av name={s.full_name} size={32}/><span style={{fontWeight:600}}>{s.full_name}</span></div></TD><TD style={{color:'#10B981',fontWeight:700}}>{s.present}</TD><TD>{s.total}</TD><TD><div style={{display:'flex',alignItems:'center',gap:10}}><div style={{width:85}}><PBar value={s.present} max={s.total}/></div><span style={{fontWeight:700,color:attColor(s.pct)}}>{s.pct}%</span></div></TD><TD><Bdg type={s.pct>=80?'success':s.pct>=60?'warning':'danger'} dot>{s.pct>=80?'Good':'<80%'}</Bdg></TD></TR>))}</Tbl>}</Card></div>)}
 
-function AssignmentsPage(){const[assignments,setAssignments]=useState([]);const[batches,setBatches]=useState([]);const[classes,setClasses]=useState([]);const[loading,setLoading]=useState(true);const[modal,setModal]=useState(false);const[form,setForm]=useState({});const[filters,setFilters]=useState({});const load=useCallback(async()=>{setLoading(true);const[a,b,c]=await Promise.all([sb.from('assignments').select('*').order('created_at',{ascending:false}),sb.from('batches').select('*'),sb.from('classes').select('*').order('class_number')]);setAssignments(a.data||[]);setBatches(b.data||[]);setClasses(c.data||[]);setLoading(false)},[]);useEffect(()=>{load()},[load]);const save=async()=>{if(!form.title||!form.batch_id||!form.due_date){toast.error('Required');return};await sb.from('assignments').insert({...form,total_marks:parseInt(form.total_marks)||100});toast.success('Created!');setModal(false);load()};const del=async id=>{if(!confirm('Delete?'))return;await sb.from('submissions').delete().eq('assignment_id',id);await sb.from('assignments').delete().eq('id',id);toast.success('Deleted');load()};const filtered=assignments.filter(a=>{if(filters.batch&&a.batch_id!==filters.batch)return false;return true});if(loading)return <SkeletonDashboard/>;return(<><FilterBar filters={[{key:'batch',label:'Batch',options:batches.map(b=>({value:b.id,label:b.name}))}]} values={filters} onChange={setFilters}/><Card title={`Assignments (${filtered.length})`} icon="📝" action={<div style={{display:'flex',gap:10}}><Btn type="outline" size="sm" icon="📊" onClick={()=>openSheet('assignments')}>Sheet</Btn><Btn onClick={()=>{setForm({total_marks:100});setModal(true)}} icon="➕">Create</Btn></div>} noPadding><Tbl headers={['Title','Batch','Class','Due','Marks','Actions']} empty={filtered.length===0?<Empty icon="📝" title="No assignments"/>:null}>{filtered.map((a,i)=>(<TR key={a.id} delay={i*.04}><TD style={{fontWeight:600,color:'#E5E7EB'}}>{a.title}</TD><TD style={{fontSize:12}}>{batches.find(b=>b.id===a.batch_id)?.name||'—'}</TD><TD style={{fontSize:12}}>{classes.find(c=>c.id===a.class_id)?'C'+classes.find(c=>c.id===a.class_id)?.class_number:'—'}</TD><TD style={{fontSize:12}}>{fmtDT(a.due_date)}</TD><TD><Bdg type="gold">{a.total_marks}pts</Bdg></TD><TD><Btn type="danger" size="xs" onClick={()=>del(a.id)}>🗑</Btn></TD></TR>))}</Tbl></Card><Modal open={modal} onClose={()=>setModal(false)} title="Create Assignment" icon="📝" footer={<><Btn type="ghost" onClick={()=>setModal(false)}>Cancel</Btn><Btn onClick={save}>Create</Btn></>}><Inp label="Title" required onChange={e=>setForm({...form,title:e.target.value})}/><TA label="Description" onChange={e=>setForm({...form,description:e.target.value})}/><Grid><Sel label="Batch" required onChange={e=>setForm({...form,batch_id:e.target.value})}><option value="">Select</option>{batches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</Sel><Sel label="Class" onChange={e=>setForm({...form,class_id:e.target.value})}><option value="">Select</option>{classes.map(c=><option key={c.id} value={c.id}>C{c.class_number}</option>)}</Sel><Inp label="Due" required type="datetime-local" onChange={e=>setForm({...form,due_date:e.target.value})}/><Inp label="Marks" type="number" value={form.total_marks||100} onChange={e=>setForm({...form,total_marks:e.target.value})}/></Grid></Modal></>)}
+function AssignmentsPage(){
+  const[assignments,setAssignments]=useState([]);const[batches,setBatches]=useState([]);const[classes,setClasses]=useState([]);const[loading,setLoading]=useState(true);const[modal,setModal]=useState(false);const[form,setForm]=useState({});const[filters,setFilters]=useState({})
+  const{dark}=useTheme()
+  const{confirm}=useConfirm()
+  
+  const load=useCallback(async()=>{setLoading(true);const[a,b,c]=await Promise.all([sb.from('assignments').select('*').order('created_at',{ascending:false}),sb.from('batches').select('*'),sb.from('classes').select('*').order('class_number')]);setAssignments(a.data||[]);setBatches(b.data||[]);setClasses(c.data||[]);setLoading(false)},[])
+  useEffect(()=>{load()},[load])
+  
+  const save=async()=>{
+    if(!form.title||!form.batch_id||!form.due_date){toast.error('Title, batch and due date required');return}
+    const data={title:form.title,description:form.description||'',batch_id:form.batch_id,class_id:form.class_id||null,due_date:form.due_date,total_marks:parseInt(form.total_marks)||100}
+    if(form.id){
+      await sb.from('assignments').update(data).eq('id',form.id)
+      toast.success('Updated! ✅')
+    }else{
+      await sb.from('assignments').insert(data)
+      toast.success('Created! 📝')
+    }
+    setModal(false);load()
+  }
+  
+  const del=async(id,title)=>{
+    const ok=await confirm({title:'Delete Assignment?',message:`"${title}" delete hoga aur iske saare submissions bhi delete ho jayenge.`,type:'danger',confirmText:'Delete',icon:'🗑️'})
+    if(!ok)return
+    await sb.from('submissions').delete().eq('assignment_id',id)
+    await sb.from('assignments').delete().eq('id',id)
+    toast.success('Deleted');load()
+  }
+  
+  const filtered=assignments.filter(a=>{if(filters.batch&&a.batch_id!==filters.batch)return false;return true})
+  
+  if(loading)return <SkeletonDashboard/>
+  
+  return(<>
+    <FilterBar filters={[{key:'batch',label:'Batch',options:batches.map(b=>({value:b.id,label:b.name}))}]} values={filters} onChange={setFilters}/>
+    <Card title={`Assignments (${filtered.length})`} icon="📝" action={<div style={{display:'flex',gap:10}}><Btn type="outline" size="sm" icon="📊" onClick={()=>openSheet('assignments')}>Sheet</Btn><Btn onClick={()=>{setForm({total_marks:100});setModal(true)}} icon="➕">Create</Btn></div>} noPadding>
+      <Tbl headers={['Title','Batch','Class','Due','Marks','Actions']} empty={filtered.length===0?<Empty icon="📝" title="No assignments"/>:null}>
+        {filtered.map((a,i)=>(
+          <TR key={a.id} delay={i*.04}>
+            <TD style={{fontWeight:600,color:dark?'#E5E7EB':'#1F2937'}}>{a.title}</TD>
+            <TD style={{fontSize:12}}>{batches.find(b=>b.id===a.batch_id)?.name||'—'}</TD>
+            <TD style={{fontSize:12}}>{classes.find(c=>c.id===a.class_id)?'C'+classes.find(c=>c.id===a.class_id)?.class_number:'—'}</TD>
+            <TD style={{fontSize:12}}>{fmtDT(a.due_date)}</TD>
+            <TD><Bdg type="gold">{a.total_marks}pts</Bdg></TD>
+            <TD>
+              <div style={{display:'flex',gap:6}}>
+                <Btn type="outline" size="xs" onClick={()=>{setForm({...a,due_date:a.due_date?a.due_date.substring(0,16):''});setModal(true)}}>✏️</Btn>
+                <Btn type="danger" size="xs" onClick={()=>del(a.id,a.title)}>🗑</Btn>
+              </div>
+            </TD>
+          </TR>
+        ))}
+      </Tbl>
+    </Card>
+    
+    <Modal open={modal} onClose={()=>setModal(false)} title={form.id?'Edit Assignment':'Create Assignment'} icon="📝" footer={<><Btn type="ghost" onClick={()=>setModal(false)}>Cancel</Btn><Btn onClick={save}>{form.id?'💾 Update':'➕ Create'}</Btn></>}>
+      <Inp label="Title" required value={form.title||''} onChange={e=>setForm({...form,title:e.target.value})}/>
+      <TA label="Description" value={form.description||''} onChange={e=>setForm({...form,description:e.target.value})}/>
+      <Grid>
+        <Sel label="Batch" required value={form.batch_id||''} onChange={e=>setForm({...form,batch_id:e.target.value})}><option value="">Select</option>{batches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</Sel>
+        <Sel label="Class" value={form.class_id||''} onChange={e=>setForm({...form,class_id:e.target.value})}><option value="">Select</option>{classes.map(c=><option key={c.id} value={c.id}>C{c.class_number}</option>)}</Sel>
+        <Inp label="Due Date" required type="datetime-local" value={form.due_date||''} onChange={e=>setForm({...form,due_date:e.target.value})}/>
+        <Inp label="Marks" type="number" value={form.total_marks||100} onChange={e=>setForm({...form,total_marks:e.target.value})}/>
+      </Grid>
+    </Modal>
+  </>)
+}
 
 function SubmissionsPage(){
   const[subs,setSubs]=useState([]);const[students,setStudents]=useState([]);const[assignments,setAssignments]=useState([]);const[loading,setLoading]=useState(true);const[modal,setModal]=useState(null);const[form,setForm]=useState({});const[filter,setFilter]=useState('all')
