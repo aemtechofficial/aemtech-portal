@@ -91,6 +91,22 @@ const uploadFile = async (file, bucket, path) => { const {error}=await sb.storag
 const useCounter = (end, dur=1200) => { const [c,setC]=useState(0); useEffect(()=>{ if(!end){setC(0);return}; let s=0; const step=end/(dur/16); const t=setInterval(()=>{s+=step;if(s>=end){setC(end);clearInterval(t)}else setC(Math.floor(s))},16); return()=>clearInterval(t) },[end,dur]); return c }
 const calcAge = dob => { if(!dob) return null; const today=new Date(); const birth=new Date(dob); let age=today.getFullYear()-birth.getFullYear(); if(today.getMonth()<birth.getMonth()||(today.getMonth()===birth.getMonth()&&today.getDate()<birth.getDate())) age--; return age }
 const childOf = (gender) => gender === 'female' ? 'D/O' : 'S/O'
+
+// ═══ AUDIT LOG — track admin actions (localStorage based) ═══
+const AUDIT_KEY = 'aemtech_audit_log'
+const logAction = (action, entity, detail = '', meta = '') => {
+  if (typeof window === 'undefined') return
+  try {
+    const raw = localStorage.getItem(AUDIT_KEY)
+    const logs = raw ? JSON.parse(raw) : []
+    let actor = 'Admin'
+    try { const s = localStorage.getItem('aemtech_session'); if (s) { const p = JSON.parse(s); actor = p?.user?.full_name || (p?.role === 'admin' ? 'Admin' : 'Student') } } catch {}
+    logs.unshift({ id: Date.now(), time: new Date().toISOString(), actor, action, entity, detail, meta })
+    localStorage.setItem(AUDIT_KEY, JSON.stringify(logs.slice(0, 400)))
+  } catch {}
+}
+const getAuditLogs = () => { if (typeof window === 'undefined') return []; try { return JSON.parse(localStorage.getItem(AUDIT_KEY) || '[]') } catch { return [] } }
+const RUBRIC_FIELDS = [['design','🎨 Design & Layout',20],['creativity','✨ Creativity',20],['accuracy','🎯 Accuracy',20],['completion','📋 Completion',20],['timeliness','⏰ Timeliness',20]]
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
 const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 const currentMonth = () => MONTHS[new Date().getMonth()]
@@ -535,11 +551,12 @@ function Sidebar({ page, setPage, mobileOpen, setMobileOpen }) {
   const [hov, setHov] = useState(null)
 
   const adminNav = [
-    { sec: 'Main', items: [{ id: 'dashboard', icon: '📊', label: 'Dashboard' }] },
-    { sec: 'People', items: [{ id: 'students', icon: '👥', label: 'Students' }, { id: 'admissions', icon: '📋', label: 'Admissions' }, { id: 'batches', icon: '🏫', label: 'Batches' }] },
-    { sec: 'Academic', items: [{ id: 'classes', icon: '📅', label: 'Classes' }, { id: 'attendance', icon: '✅', label: 'Attendance' }, { id: 'assignments', icon: '📝', label: 'Assignments' }, { id: 'submissions', icon: '📤', label: 'Submissions' }, { id: 'recordings', icon: '🎥', label: 'Recordings' }, { id: 'timetable', icon: '🗓', label: 'Timetable' }, { id: 'quizzes', icon: '🧠', label: 'Quizzes' }] },
-    { sec: 'Finance', items: [{ id: 'fees', icon: '💰', label: 'Fee Management' }, { id: 'analytics', icon: '📈', label: 'Analytics' }] },
-    { sec: 'Tools', items: [{ id: 'announcements', icon: '📢', label: 'Announcements' }, { id: 'progress', icon: '📄', label: 'Progress Report' }, { id: 'certificates', icon: '🎓', label: 'Certificates' }, { id: 'leaderboard', icon: '🏆', label: 'Leaderboard' }, { id: 'sync', icon: '🔄', label: 'Sheet Sync' }, { id: 'excel', icon: '📈', label: 'Import/Export' }, { id: 'settings', icon: '⚙️', label: 'Settings' }] },
+    { sec: 'Main', items: [{ id: 'dashboard', icon: '📊', label: 'Dashboard' }, { id: 'tasks', icon: '🎯', label: 'Task Center' }] },
+    { sec: 'People', items: [{ id: 'students', icon: '👥', label: 'Students' }, { id: 'admissions', icon: '📋', label: 'Admissions' }, { id: 'batches', icon: '🏫', label: 'Batches' }, { id: 'idcards', icon: '🪪', label: 'ID Cards' }] },
+    { sec: 'Academic', items: [{ id: 'classes', icon: '📅', label: 'Classes' }, { id: 'attendance', icon: '✅', label: 'Attendance' }, { id: 'alerts', icon: '🚨', label: 'Attendance Alerts' }, { id: 'assignments', icon: '📝', label: 'Assignments' }, { id: 'submissions', icon: '📤', label: 'Submissions' }, { id: 'recordings', icon: '🎥', label: 'Recordings' }, { id: 'timetable', icon: '🗓', label: 'Timetable' }, { id: 'quizzes', icon: '🧠', label: 'Quizzes' }, { id: 'promotion', icon: '⏭', label: 'Batch Promotion' }] },
+    { sec: 'Finance', items: [{ id: 'fees', icon: '💰', label: 'Fee Management' }, { id: 'ledger', icon: '📒', label: 'Fee Ledger' }, { id: 'reminders', icon: '📣', label: 'WhatsApp Reminders' }, { id: 'analytics', icon: '📈', label: 'Analytics' }] },
+    { sec: 'Reports', items: [{ id: 'report', icon: '📑', label: 'Monthly Report' }, { id: 'progress', icon: '📄', label: 'Progress Report' }, { id: 'leaderboard', icon: '🏆', label: 'Leaderboard' }] },
+    { sec: 'Tools', items: [{ id: 'announcements', icon: '📢', label: 'Announcements' }, { id: 'certificates', icon: '🎓', label: 'Certificates' }, { id: 'sync', icon: '🔄', label: 'Sheet Sync' }, { id: 'excel', icon: '📈', label: 'Import/Export' }, { id: 'audit', icon: '🕵️', label: 'Audit Log' }, { id: 'settings', icon: '⚙️', label: 'Settings' }] },
   ]
   const studentNav = [
     { sec: 'My Portal', items: [{ id: 'dashboard', icon: '📊', label: 'Dashboard' }, { id: 'attendance', icon: '✅', label: 'My Attendance' }, { id: 'assignments', icon: '📝', label: 'Assignments' }, { id: 'quizzes', icon: '🧠', label: 'Quizzes' }, { id: 'recordings', icon: '🎥', label: 'Recordings' }, { id: 'timetable', icon: '🗓', label: 'Timetable' }, { id: 'announcements', icon: '📢', label: 'Announcements' }, { id: 'fees', icon: '💰', label: 'My Fees' }, { id: 'profile', icon: '👤', label: 'My Profile' }] },
@@ -1191,7 +1208,7 @@ function AdminDashboard() {
 // STUDENTS — Sexy Premium + Filters
 // ═══════════════════════════════════════
 function StudentsPage() {
-  const [students,setStudents]=useState([]); const [batches,setBatches]=useState([]); const [loading,setLoading]=useState(true); const [search,setSearch]=useState(''); const [modal,setModal]=useState(null); const [form,setForm]=useState({}); const [importing,setImporting]=useState(false); const [viewStudent,setViewStudent]=useState(null); const [filters,setFilters]=useState({}); const [imgUploading,setImgUploading]=useState(false); const {dark}=useTheme()
+  const [students,setStudents]=useState([]); const [batches,setBatches]=useState([]); const [loading,setLoading]=useState(true); const [search,setSearch]=useState(''); const [modal,setModal]=useState(null); const [form,setForm]=useState({}); const [importing,setImporting]=useState(false); const [viewStudent,setViewStudent]=useState(null); const [filters,setFilters]=useState({}); const [imgUploading,setImgUploading]=useState(false); const {dark}=useTheme(); const {confirm}=useConfirm()
 
   const load=useCallback(async()=>{setLoading(true);const[s,b]=await Promise.all([sb.from('students').select('*').order('created_at',{ascending:false}),sb.from('batches').select('*')]);setStudents(s.data||[]);setBatches(b.data||[]);setLoading(false)},[])
   useEffect(()=>{load()},[load])
@@ -1216,7 +1233,7 @@ function StudentsPage() {
       const{data:existingLogin}=await sb.from('students').select('id').eq('login_email',saveData.login_email).maybeSingle()
       if(existingLogin){toast.error('Login email exists!');return}
       const{error}=await sb.from('students').insert({...saveData,status:'active',fee_status:'pending',password:form.password||'12345678'})
-      if(error){toast.error(error.message);return};toast.success('Added! 🎉')
+      if(error){toast.error(error.message);return};logAction('CREATE','Student',form.full_name||'');toast.success('Added! 🎉')
     } else {
       const{error}=await sb.from('students').update(saveData).eq('id',form.id)
       if(error){toast.error(error.message);return};toast.success('Updated! ✅')
@@ -1225,7 +1242,12 @@ function StudentsPage() {
     setTimeout(async()=>{const{data}=await sb.from('students').select('*');await syncToSheet('syncStudents',{students:data||[]});await syncToSheet('syncFees',{students:data||[]})},1000)
   }
 
-  const del=async(id,name)=>{if(!confirm(`Delete ${name}?`))return;await sb.from('attendance').delete().eq('student_id',id);await sb.from('submissions').delete().eq('student_id',id);await sb.from('fee_payments').delete().eq('student_id',id);await sb.from('students').delete().eq('id',id);toast.success('Deleted');load()}
+  const del=async(id,name)=>{
+    const ok=await confirm({title:'Delete Student?',message:`${name} aur unka saara data (attendance, submissions, fees) delete ho jayega.`,type:'danger',confirmText:'Delete',icon:'🗑️'})
+    if(!ok)return
+    await sb.from('attendance').delete().eq('student_id',id);await sb.from('submissions').delete().eq('student_id',id);await sb.from('fee_payments').delete().eq('student_id',id);await sb.from('students').delete().eq('id',id)
+    toast.success('Deleted');load()
+  }
 
   const removeStudentImage = async (student) => {
     if (!student?.id) return
@@ -1285,9 +1307,50 @@ function StudentsPage() {
   const [bulkModal,setBulkModal]=useState(false)
   const [bulkForm,setBulkForm]=useState({pattern:'name',password:'12345678'})
   const [bulkUpdating,setBulkUpdating]=useState(false)
+  const [selectedIds,setSelectedIds]=useState([])
+  const [bulkActionModal,setBulkActionModal]=useState(null)
+  const [bulkAction,setBulkAction]=useState({})
+  const [bulkBusy,setBulkBusy]=useState(false)
+  
+  const toggleSelect = (id) => setSelectedIds(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id])
+  const selectedStudents = students.filter(s => selectedIds.includes(s.id))
+  
+  const runBulkAction = async () => {
+    if (selectedIds.length === 0) { toast.error('Select students first'); return }
+    setBulkBusy(true)
+    try {
+      const act = bulkAction.type
+      let done = 0
+      for (const s of selectedStudents) {
+        if (act === 'status') { await sb.from('students').update({ status: bulkAction.status }).eq('id', s.id); done++ }
+        else if (act === 'batch') { await sb.from('students').update({ batch_id: bulkAction.batch_id }).eq('id', s.id); done++ }
+        else if (act === 'fee') { await sb.from('students').update({ fee_amount: parseFloat(bulkAction.fee_amount) || 0 }).eq('id', s.id); done++ }
+        else if (act === 'resetPass') { await sb.from('students').update({ password: bulkAction.password || '12345678' }).eq('id', s.id); done++ }
+        else if (act === 'archive') { await sb.from('students').update({ status: 'inactive' }).eq('id', s.id); done++ }
+      }
+      toastSuccess(`${done} students updated! ✅`, { undo: async () => { for (const s of selectedStudents) { await sb.from('students').update({ status: s.status, batch_id: s.batch_id, fee_amount: s.fee_amount, password: s.password }).eq('id', s.id) } load() }, duration: 5000 })
+      setBulkActionModal(null); setSelectedIds([]); load()
+    } catch { toast.error('Bulk action failed') }
+    finally { setBulkBusy(false) }
+  }
+  
+  const bulkDeleteStudents = async () => {
+    const ok = await confirm({ title: `Delete ${selectedIds.length} Students?`, message: `${selectedIds.length} students aur unka saara data (attendance, submissions, fees) delete ho jayega. Yeh undo nahi ho sakta!`, type: 'danger', confirmText: `Delete ${selectedIds.length}`, icon: '🗑️' })
+    if (!ok) return
+    setBulkBusy(true)
+    for (const id of selectedIds) {
+      await sb.from('attendance').delete().eq('student_id', id)
+      await sb.from('submissions').delete().eq('student_id', id)
+      await sb.from('fee_payments').delete().eq('student_id', id)
+      await sb.from('students').delete().eq('id', id)
+    }
+    logAction('DELETE','Students',`${selectedIds.length} students`);toast.success(`${selectedIds.length} students deleted`)
+    setSelectedIds([]); setBulkBusy(false); load()
+  }
   
   const bulkUpdateLogins = async () => {
-    if(!confirm(`${students.length} students ka login email aur password update hoga. Confirm?`)) return
+    const ok = await confirm({ title:'Bulk Update Logins?', message:`${students.length} students ka login email aur password update hoga.`, type:'warning', confirmText:'Update All', icon:'🔄' })
+    if(!ok) return
     setBulkUpdating(true)
     let count = 0
     for (const s of students) {
@@ -1346,6 +1409,24 @@ function StudentsPage() {
 
   return (
     <>
+      {/* Bulk Selection Bar */}
+      <div style={{...getGlass(dark),borderRadius:16,padding:'14px 20px',marginBottom:18,display:'flex',alignItems:'center',gap:14,flexWrap:'wrap',border:selectedIds.length>0?'1px solid rgba(255,215,0,.25)':undefined}}>
+        <label style={{display:'flex',alignItems:'center',gap:8,fontSize:12,fontWeight:700,color:'#6B7280',cursor:'pointer'}}>
+          <input type="checkbox" checked={selectedIds.length>0&&selectedIds.length===filtered.length} onChange={e=>setSelectedIds(e.target.checked?filtered.map(s=>s.id):[])} style={{accentColor:'#FFD700',width:16,height:16}}/>
+          Select All
+        </label>
+        {selectedIds.length>0&&<><Bdg type="gold" dot>{selectedIds.length} selected</Bdg>
+          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+            <Btn size="xs" type="outline" onClick={()=>{setBulkAction({type:'status',status:'active'});setBulkActionModal('status')}}>✅ Activate</Btn>
+            <Btn size="xs" type="warning" onClick={()=>{setBulkAction({type:'batch'});setBulkActionModal('batch')}}>🏫 Change Batch</Btn>
+            <Btn size="xs" type="success" onClick={()=>{setBulkAction({type:'fee'});setBulkActionModal('fee')}}>💰 Set Fee</Btn>
+            <Btn size="xs" type="ghost" onClick={()=>{setBulkAction({type:'resetPass',password:'12345678'});setBulkActionModal('resetPass')}}>🔑 Reset Password</Btn>
+            <Btn size="xs" type="ghost" onClick={()=>{setBulkAction({type:'archive'});setBulkActionModal('archive')}}>📦 Archive</Btn>
+            <Btn size="xs" type="danger" onClick={bulkDeleteStudents} loading={bulkBusy}>🗑 Delete</Btn>
+            <Btn size="xs" type="ghost" onClick={()=>setSelectedIds([])}>✕ Clear</Btn>
+          </div></>}
+      </div>
+
       <FilterBar filters={[{key:'batch',label:'Batch',options:batches.map(b=>({value:b.id,label:b.name}))},{key:'status',label:'Status',options:['active','inactive','graduated']},{key:'fee',label:'Fee',options:['pending','partial','paid']},{key:'gender',label:'Gender',options:[{value:'male',label:'Male'},{value:'female',label:'Female'}]},{key:'city',label:'City',options:uniqueCities},{key:'referred',label:'Referred',options:REFERRAL_SOURCES}]} values={filters} onChange={setFilters}/>
 
       <Card title={`Students (${filtered.length}${filtered.length!==students.length?' of '+students.length:''})`} icon="👥" action={
@@ -1357,9 +1438,10 @@ function StudentsPage() {
           <Btn type="ghost" size="sm" icon="🔄" onClick={()=>setBulkModal(true)}>Bulk</Btn>
           <Btn onClick={()=>{setForm({password:'12345678',gender:'male'});setModal('add')}} icon="➕">Add</Btn>
         </div>} noPadding>
-        <Tbl headers={['Student','Phone','City','Batch','Fee','Status','Actions']} empty={filtered.length===0?<Empty icon="👥" title="No students" sub="Try adjusting filters"/>:null}>
+        <Tbl headers={['','Student','Phone','City','Batch','Fee','Status','Actions']} empty={filtered.length===0?<Empty icon="👥" title="No students" sub="Try adjusting filters"/>:null}>
           {filtered.map((s,i)=>(
             <TR key={s.id} delay={i*.025} onClick={()=>setViewStudent(s)}>
+              <TD onClick={e=>e.stopPropagation()}><input type="checkbox" checked={selectedIds.includes(s.id)} onChange={()=>toggleSelect(s.id)} style={{accentColor:'#FFD700',width:16,height:16,cursor:'pointer'}}/></TD>
               <TD><div style={{display:'flex',alignItems:'center',gap:12}}><Av name={s.full_name} src={s.profile_image||null} size={36}/><div><div style={{fontWeight:700,fontSize:13,color:dark?'#E5E7EB':'#1F2937'}}>{s.full_name}</div><div style={{fontSize:11,color:'#4B5563'}}>{s.email}</div></div></div></TD>
               <TD style={{fontSize:12}}>{s.phone||'—'}</TD>
               <TD style={{fontSize:12}}>{s.city||'—'}</TD>
@@ -1519,6 +1601,40 @@ function StudentsPage() {
             })}
             {students.length>5&&<div style={{textAlign:'center',padding:10,fontSize:12,color:'#6B7280'}}>...aur {students.length-5} students</div>}
           </div>
+        </div>
+      </Modal>
+
+      {/* ═══ BULK ACTION MODALS ═══ */}
+      <Modal open={bulkActionModal==='status'} onClose={()=>setBulkActionModal(null)} title={`✅ Activate ${selectedIds.length} Students`} icon="✅" footer={<><Btn type="ghost" onClick={()=>setBulkActionModal(null)}>Cancel</Btn><Btn type="success" onClick={runBulkAction} loading={bulkBusy}>✅ Activate All</Btn></>}>
+        <div style={{background:'rgba(16,185,129,.05)',border:'1px solid rgba(16,185,129,.2)',borderRadius:14,padding:16,marginBottom:18}}>
+          <div style={{fontSize:13,fontWeight:700,color:'#10B981',marginBottom:6}}>{selectedIds.length} students ko ACTIVE status mil jayega</div>
+          <div style={{fontSize:12,color:'#6B7280'}}>Undo option available hoga.</div>
+        </div>
+        <div style={{maxHeight:200,overflowY:'auto'}} className="cs">{selectedStudents.map(s=><div key={s.id} style={{padding:'9px 0',borderBottom:'1px solid rgba(255,255,255,.03)',fontSize:13,color:dark?'#D1D5DB':'#4B5563'}}>• {s.full_name}</div>)}</div>
+      </Modal>
+
+      <Modal open={bulkActionModal==='batch'} onClose={()=>setBulkActionModal(null)} title={`🏫 Change Batch — ${selectedIds.length} Students`} icon="🏫" footer={<><Btn type="ghost" onClick={()=>setBulkActionModal(null)}>Cancel</Btn><Btn onClick={runBulkAction} loading={bulkBusy}>🏫 Transfer All</Btn></>}>
+        <Sel label="New Batch" required value={bulkAction.batch_id||''} onChange={e=>setBulkAction({...bulkAction,batch_id:e.target.value})}>
+          <option value="">Select Batch</option>
+          {batches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}
+        </Sel>
+        <div style={{fontSize:12,color:'#6B7280',marginTop:8}}>{selectedIds.length} students selected batch mein transfer honge.</div>
+      </Modal>
+
+      <Modal open={bulkActionModal==='fee'} onClose={()=>setBulkActionModal(null)} title={`💰 Set Fee — ${selectedIds.length} Students`} icon="💰" footer={<><Btn type="ghost" onClick={()=>setBulkActionModal(null)}>Cancel</Btn><Btn type="success" onClick={runBulkAction} loading={bulkBusy}>💰 Apply to All</Btn></>}>
+        <Inp label="Monthly Fee (PKR)" type="number" required value={bulkAction.fee_amount||''} onChange={e=>setBulkAction({...bulkAction,fee_amount:e.target.value})} placeholder="5000"/>
+        <div style={{fontSize:12,color:'#6B7280'}}>Yeh fee amount {selectedIds.length} students par apply hoga.</div>
+      </Modal>
+
+      <Modal open={bulkActionModal==='resetPass'} onClose={()=>setBulkActionModal(null)} title={`🔑 Reset Password — ${selectedIds.length} Students`} icon="🔑" footer={<><Btn type="ghost" onClick={()=>setBulkActionModal(null)}>Cancel</Btn><Btn onClick={runBulkAction} loading={bulkBusy}>🔑 Reset All</Btn></>}>
+        <Inp label="New Password" value={bulkAction.password||''} onChange={e=>setBulkAction({...bulkAction,password:e.target.value})} placeholder="12345678"/>
+        <div style={{background:'rgba(245,158,11,.05)',border:'1px solid rgba(245,158,11,.2)',borderRadius:12,padding:14,marginTop:8,fontSize:12,color:'#F59E0B'}}>⚠️ Sab students ka password same ho jayega.</div>
+      </Modal>
+
+      <Modal open={bulkActionModal==='archive'} onClose={()=>setBulkActionModal(null)} title={`📦 Archive ${selectedIds.length} Students`} icon="📦" footer={<><Btn type="ghost" onClick={()=>setBulkActionModal(null)}>Cancel</Btn><Btn type="warning" onClick={runBulkAction} loading={bulkBusy}>📦 Archive All</Btn></>}>
+        <div style={{background:'rgba(245,158,11,.05)',border:'1px solid rgba(245,158,11,.2)',borderRadius:14,padding:16,marginBottom:18}}>
+          <div style={{fontSize:13,fontWeight:700,color:'#F59E0B',marginBottom:6}}>{selectedIds.length} students INACTIVE ho jayenge</div>
+          <div style={{fontSize:12,color:'#6B7280'}}>Data delete nahi hoga, sirf inactive mark honge.</div>
         </div>
       </Modal>
     </>
@@ -2042,9 +2158,9 @@ function AdmissionsPage(){
   )
 }
 
-function BatchesPage(){const[batches,setBatches]=useState([]);const[loading,setLoading]=useState(true);const[modal,setModal]=useState(false);const[form,setForm]=useState({});const load=useCallback(async()=>{setLoading(true);const{data}=await sb.from('batches').select('*').order('created_at',{ascending:false});setBatches(data||[]);setLoading(false)},[]);useEffect(()=>{load()},[load]);const save=async()=>{if(!form.name){toast.error('Required');return};if(form.id){await sb.from('batches').update(form).eq('id',form.id)}else{await sb.from('batches').insert({...form,status:form.status||'active'})};toast.success('Saved!');setModal(false);load()};const del=async(id,name)=>{if(!confirm(`Delete "${name}"?`))return;await sb.from('batches').delete().eq('id',id);toast.success('Deleted');load()};if(loading)return <SkeletonDashboard/>;return(<><Card title={`Batches (${batches.length})`} icon="🏫" action={<Btn onClick={()=>{setForm({platform:'Google Meet',status:'active'});setModal(true)}} icon="➕">Add</Btn>} noPadding><Tbl headers={['Name','Schedule','Platform','Start','End','Status','Actions']} empty={batches.length===0?<Empty icon="🏫" title="No batches"/>:null}>{batches.map((b,i)=>(<TR key={b.id} delay={i*.04}><TD style={{fontWeight:600,color:'#E5E7EB'}}>{b.name}</TD><TD style={{fontSize:12}}>{b.schedule||'—'}</TD><TD style={{fontSize:12}}>{b.platform||'—'}</TD><TD style={{fontSize:12}}>{fmtDate(b.start_date)}</TD><TD style={{fontSize:12}}>{fmtDate(b.end_date)}</TD><TD><Bdg type={statusBadge(b.status)} dot>{b.status}</Bdg></TD><TD><div style={{display:'flex',gap:6}}><Btn type="outline" size="xs" onClick={()=>{setForm(b);setModal(true)}}>✏️</Btn><Btn type="danger" size="xs" onClick={()=>del(b.id,b.name)}>🗑</Btn></div></TD></TR>))}</Tbl></Card><Modal open={modal} onClose={()=>setModal(false)} title={form.id?'Edit':'Add Batch'} icon="🏫" footer={<><Btn type="ghost" onClick={()=>setModal(false)}>Cancel</Btn><Btn onClick={save}>Save</Btn></>}><Inp label="Name" required value={form.name||''} onChange={e=>setForm({...form,name:e.target.value})}/><Grid><Sel label="Platform" value={form.platform||'Google Meet'} onChange={e=>setForm({...form,platform:e.target.value})}><option>Google Meet</option><option>Zoom</option><option>Both</option></Sel><Sel label="Status" value={form.status||'active'} onChange={e=>setForm({...form,status:e.target.value})}><option value="active">Active</option><option value="upcoming">Upcoming</option><option value="completed">Completed</option></Sel><Inp label="Start" type="date" value={form.start_date||''} onChange={e=>setForm({...form,start_date:e.target.value})}/><Inp label="End" type="date" value={form.end_date||''} onChange={e=>setForm({...form,end_date:e.target.value})}/></Grid><Inp label="Schedule" placeholder="Mon & Thu, 7 PM" value={form.schedule||''} onChange={e=>setForm({...form,schedule:e.target.value})}/></Modal></>)}
+function BatchesPage(){const[batches,setBatches]=useState([]);const[loading,setLoading]=useState(true);const[modal,setModal]=useState(false);const[form,setForm]=useState({});const load=useCallback(async()=>{setLoading(true);const{data}=await sb.from('batches').select('*').order('created_at',{ascending:false});setBatches(data||[]);setLoading(false)},[]);useEffect(()=>{load()},[load]);const save=async()=>{if(!form.name){toast.error('Required');return};if(form.id){await sb.from('batches').update(form).eq('id',form.id)}else{await sb.from('batches').insert({...form,status:form.status||'active'})};toast.success('Saved!');setModal(false);load()};const{confirm}=useConfirm();const del=async(id,name)=>{confirm({title:'Delete Batch?',message:`"${name}" batch delete hoga.`,type:'danger',confirmText:'Delete',icon:'🗑️'}).then(async ok=>{if(!ok)return;await sb.from('batches').delete().eq('id',id);toast.success('Deleted');load()})};if(loading)return <SkeletonDashboard/>;return(<><Card title={`Batches (${batches.length})`} icon="🏫" action={<Btn onClick={()=>{setForm({platform:'Google Meet',status:'active'});setModal(true)}} icon="➕">Add</Btn>} noPadding><Tbl headers={['Name','Schedule','Platform','Start','End','Status','Actions']} empty={batches.length===0?<Empty icon="🏫" title="No batches"/>:null}>{batches.map((b,i)=>(<TR key={b.id} delay={i*.04}><TD style={{fontWeight:600,color:'#E5E7EB'}}>{b.name}</TD><TD style={{fontSize:12}}>{b.schedule||'—'}</TD><TD style={{fontSize:12}}>{b.platform||'—'}</TD><TD style={{fontSize:12}}>{fmtDate(b.start_date)}</TD><TD style={{fontSize:12}}>{fmtDate(b.end_date)}</TD><TD><Bdg type={statusBadge(b.status)} dot>{b.status}</Bdg></TD><TD><div style={{display:'flex',gap:6}}><Btn type="outline" size="xs" onClick={()=>{setForm(b);setModal(true)}}>✏️</Btn><Btn type="danger" size="xs" onClick={()=>del(b.id,b.name)}>🗑</Btn></div></TD></TR>))}</Tbl></Card><Modal open={modal} onClose={()=>setModal(false)} title={form.id?'Edit':'Add Batch'} icon="🏫" footer={<><Btn type="ghost" onClick={()=>setModal(false)}>Cancel</Btn><Btn onClick={save}>Save</Btn></>}><Inp label="Name" required value={form.name||''} onChange={e=>setForm({...form,name:e.target.value})}/><Grid><Sel label="Platform" value={form.platform||'Google Meet'} onChange={e=>setForm({...form,platform:e.target.value})}><option>Google Meet</option><option>Zoom</option><option>Both</option></Sel><Sel label="Status" value={form.status||'active'} onChange={e=>setForm({...form,status:e.target.value})}><option value="active">Active</option><option value="upcoming">Upcoming</option><option value="completed">Completed</option></Sel><Inp label="Start" type="date" value={form.start_date||''} onChange={e=>setForm({...form,start_date:e.target.value})}/><Inp label="End" type="date" value={form.end_date||''} onChange={e=>setForm({...form,end_date:e.target.value})}/></Grid><Inp label="Schedule" placeholder="Mon & Thu, 7 PM" value={form.schedule||''} onChange={e=>setForm({...form,schedule:e.target.value})}/></Modal></>)}
 
-function ClassesPage(){const[classes,setClasses]=useState([]);const[batches,setBatches]=useState([]);const[loading,setLoading]=useState(true);const[modal,setModal]=useState(false);const[form,setForm]=useState({});const[filters,setFilters]=useState({});const load=useCallback(async()=>{setLoading(true);const[c,b]=await Promise.all([sb.from('classes').select('*').order('class_number'),sb.from('batches').select('*')]);setClasses(c.data||[]);setBatches(b.data||[]);setLoading(false)},[]);useEffect(()=>{load()},[load]);const save=async()=>{if(!form.class_number||!form.title||!form.batch_id){toast.error('Required');return};const data={...form,class_number:parseInt(form.class_number)};if(form.id){await sb.from('classes').update(data).eq('id',form.id)}else{await sb.from('classes').insert({...data,status:form.status||'scheduled'})};toast.success('Saved!');setModal(false);load()};const del=async id=>{if(!confirm('Delete?'))return;await sb.from('attendance').delete().eq('class_id',id);await sb.from('classes').delete().eq('id',id);toast.success('Deleted');load()};const filtered=classes.filter(c=>{if(filters.batch&&c.batch_id!==filters.batch)return false;if(filters.status&&c.status!==filters.status)return false;return true});if(loading)return <SkeletonDashboard/>;return(<><FilterBar filters={[{key:'batch',label:'Batch',options:batches.map(b=>({value:b.id,label:b.name}))},{key:'status',label:'Status',options:['scheduled','live','completed']}]} values={filters} onChange={setFilters}/><Card title={`Classes (${filtered.length})`} icon="📅" action={<Btn onClick={()=>{setForm({status:'scheduled'});setModal(true)}} icon="➕">Add</Btn>} noPadding><Tbl headers={['#','Title','Batch','Date','Time','Recording','Status','Actions']} empty={filtered.length===0?<Empty icon="📅" title="No classes"/>:null}>{filtered.map((c,i)=>(<TR key={c.id} delay={i*.04}><TD><Bdg type="gold">C{c.class_number}</Bdg></TD><TD style={{fontWeight:600,maxWidth:200,color:'#E5E7EB'}}>{c.title}</TD><TD style={{fontSize:12}}>{batches.find(b=>b.id===c.batch_id)?.name||'—'}</TD><TD style={{fontSize:12}}>{fmtDate(c.date)}</TD><TD style={{fontSize:12}}>{c.time||'—'}</TD><TD>{c.recording_url?<a href={c.recording_url} target="_blank" rel="noreferrer" style={{color:'#FFD700',fontSize:12,fontWeight:600}}>▶</a>:'—'}</TD><TD><Bdg type={statusBadge(c.status)} dot>{c.status}</Bdg></TD><TD><div style={{display:'flex',gap:6}}><Btn type="outline" size="xs" onClick={()=>{setForm(c);setModal(true)}}>✏️</Btn><Btn type="danger" size="xs" onClick={()=>del(c.id)}>🗑</Btn></div></TD></TR>))}</Tbl></Card><Modal open={modal} onClose={()=>setModal(false)} title={form.id?'Edit':'Add Class'} icon="📅" footer={<><Btn type="ghost" onClick={()=>setModal(false)}>Cancel</Btn><Btn onClick={save}>Save</Btn></>}><Grid><Inp label="#" required type="number" value={form.class_number||''} onChange={e=>setForm({...form,class_number:e.target.value})}/><Sel label="Batch" required value={form.batch_id||''} onChange={e=>setForm({...form,batch_id:e.target.value})}><option value="">Select</option>{batches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</Sel></Grid><Inp label="Title" required value={form.title||''} onChange={e=>setForm({...form,title:e.target.value})}/><Grid><Inp label="Date" type="date" value={form.date||''} onChange={e=>setForm({...form,date:e.target.value})}/><Inp label="Time" value={form.time||''} onChange={e=>setForm({...form,time:e.target.value})}/></Grid><Inp label="Recording" value={form.recording_url||''} onChange={e=>setForm({...form,recording_url:e.target.value})}/><Sel label="Status" value={form.status||'scheduled'} onChange={e=>setForm({...form,status:e.target.value})}><option value="scheduled">Scheduled</option><option value="live">Live</option><option value="completed">Completed</option></Sel><TA label="Notes" value={form.notes||''} onChange={e=>setForm({...form,notes:e.target.value})}/></Modal></>)}
+function ClassesPage(){const[classes,setClasses]=useState([]);const[batches,setBatches]=useState([]);const[loading,setLoading]=useState(true);const[modal,setModal]=useState(false);const[form,setForm]=useState({});const[filters,setFilters]=useState({});const load=useCallback(async()=>{setLoading(true);const[c,b]=await Promise.all([sb.from('classes').select('*').order('class_number'),sb.from('batches').select('*')]);setClasses(c.data||[]);setBatches(b.data||[]);setLoading(false)},[]);useEffect(()=>{load()},[load]);const save=async()=>{if(!form.class_number||!form.title||!form.batch_id){toast.error('Required');return};const data={...form,class_number:parseInt(form.class_number)};if(form.id){await sb.from('classes').update(data).eq('id',form.id)}else{await sb.from('classes').insert({...data,status:form.status||'scheduled'})};toast.success('Saved!');setModal(false);load()};const{confirm}=useConfirm();const del=async id=>{confirm({title:'Delete Class?',message:'Yeh class aur iski attendance delete ho jayegi.',type:'danger',confirmText:'Delete',icon:'🗑️'}).then(async ok=>{if(!ok)return;await sb.from('attendance').delete().eq('class_id',id);await sb.from('classes').delete().eq('id',id);toast.success('Deleted');load()})};const filtered=classes.filter(c=>{if(filters.batch&&c.batch_id!==filters.batch)return false;if(filters.status&&c.status!==filters.status)return false;return true});if(loading)return <SkeletonDashboard/>;return(<><FilterBar filters={[{key:'batch',label:'Batch',options:batches.map(b=>({value:b.id,label:b.name}))},{key:'status',label:'Status',options:['scheduled','live','completed']}]} values={filters} onChange={setFilters}/><Card title={`Classes (${filtered.length})`} icon="📅" action={<Btn onClick={()=>{setForm({status:'scheduled'});setModal(true)}} icon="➕">Add</Btn>} noPadding><Tbl headers={['#','Title','Batch','Date','Time','Recording','Status','Actions']} empty={filtered.length===0?<Empty icon="📅" title="No classes"/>:null}>{filtered.map((c,i)=>(<TR key={c.id} delay={i*.04}><TD><Bdg type="gold">C{c.class_number}</Bdg></TD><TD style={{fontWeight:600,maxWidth:230,color:'#E5E7EB',whiteSpace:'normal',wordBreak:'break-word',lineHeight:1.45,overflow:'hidden',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',verticalAlign:'middle'}}>{c.title}</TD><TD style={{fontSize:12}}>{batches.find(b=>b.id===c.batch_id)?.name||'—'}</TD><TD style={{fontSize:12}}>{fmtDate(c.date)}</TD><TD style={{fontSize:12}}>{c.time||'—'}</TD><TD>{c.recording_url?<a href={c.recording_url} target="_blank" rel="noreferrer" style={{color:'#FFD700',fontSize:12,fontWeight:600}}>▶</a>:'—'}</TD><TD><Bdg type={statusBadge(c.status)} dot>{c.status}</Bdg></TD><TD><div style={{display:'flex',gap:6}}><Btn type="outline" size="xs" onClick={()=>{setForm(c);setModal(true)}}>✏️</Btn><Btn type="danger" size="xs" onClick={()=>del(c.id)}>🗑</Btn></div></TD></TR>))}</Tbl></Card><Modal open={modal} onClose={()=>setModal(false)} title={form.id?'Edit':'Add Class'} icon="📅" footer={<><Btn type="ghost" onClick={()=>setModal(false)}>Cancel</Btn><Btn onClick={save}>Save</Btn></>}><Grid><Inp label="#" required type="number" value={form.class_number||''} onChange={e=>setForm({...form,class_number:e.target.value})}/><Sel label="Batch" required value={form.batch_id||''} onChange={e=>setForm({...form,batch_id:e.target.value})}><option value="">Select</option>{batches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</Sel></Grid><Inp label="Title" required value={form.title||''} onChange={e=>setForm({...form,title:e.target.value})}/><Grid><Inp label="Date" type="date" value={form.date||''} onChange={e=>setForm({...form,date:e.target.value})}/><Inp label="Time" value={form.time||''} onChange={e=>setForm({...form,time:e.target.value})}/></Grid><Inp label="Recording" value={form.recording_url||''} onChange={e=>setForm({...form,recording_url:e.target.value})}/><Sel label="Status" value={form.status||'scheduled'} onChange={e=>setForm({...form,status:e.target.value})}><option value="scheduled">Scheduled</option><option value="live">Live</option><option value="completed">Completed</option></Sel><TA label="Notes" value={form.notes||''} onChange={e=>setForm({...form,notes:e.target.value})}/></Modal></>)}
 
 function AttendancePage(){const[batches,setBatches]=useState([]);const[classes,setClasses]=useState([]);const[students,setStudents]=useState([]);const[att,setAtt]=useState({});const[selB,setSelB]=useState('');const[selC,setSelC]=useState('');const[repB,setRepB]=useState('');const[report,setReport]=useState([]);const[saving,setSaving]=useState(false);const{dark}=useTheme();useEffect(()=>{sb.from('batches').select('*').then(r=>setBatches(r.data||[]))},[]);const loadC=async bid=>{setSelB(bid);setSelC('');setStudents([]);const{data}=await sb.from('classes').select('*').eq('batch_id',bid).order('class_number');setClasses(data||[])};const loadS=async cid=>{setSelC(cid);const[s,a]=await Promise.all([sb.from('students').select('*').eq('batch_id',selB).eq('status','active'),sb.from('attendance').select('*').eq('class_id',cid)]);const map={};(a.data||[]).forEach(x=>map[x.student_id]=x.status);const state={};(s.data||[]).forEach(x=>state[x.id]=map[x.id]||'absent');setStudents(s.data||[]);setAtt(state)};const toggle=id=>{const states=['present','absent','late'];setAtt(p=>({...p,[id]:states[(states.indexOf(p[id]||'absent')+1)%3]}))};const markAll=st=>{const n={};students.forEach(s=>n[s.id]=st);setAtt(n)};const save=async()=>{if(!selC)return;setSaving(true);await sb.from('attendance').delete().eq('class_id',selC);await sb.from('attendance').insert(students.map(s=>({class_id:selC,student_id:s.id,status:att[s.id]||'absent'})));toast.success('Saved!');const[allA,allS,allC]=await Promise.all([sb.from('attendance').select('*'),sb.from('students').select('*'),sb.from('classes').select('*')]);await syncToSheet('syncAttendance',{records:(allA.data||[]).map(a=>({student_name:allS.data?.find(s=>s.id===a.student_id)?.full_name||'',class_number:allC.data?.find(c=>c.id===a.class_id)?.class_number||'',class_title:allC.data?.find(c=>c.id===a.class_id)?.title||'',date:fmtDate(a.marked_at||new Date()),status:a.status}))});setSaving(false)};const loadReport=async bid=>{setRepB(bid);const[s,c]=await Promise.all([sb.from('students').select('*').eq('batch_id',bid),sb.from('classes').select('*').eq('batch_id',bid)]);const total=(c.data||[]).length;const rows=await Promise.all((s.data||[]).map(async st=>{const{data:a}=await sb.from('attendance').select('*').eq('student_id',st.id);const present=(a||[]).filter(x=>x.status==='present').length;return{...st,present,total,pct:total>0?Math.round((present/total)*100):0}}));setReport(rows)};const attColors={present:{border:'rgba(16,185,129,.4)',bg:'rgba(16,185,129,.05)',color:'#10B981'},absent:{border:'rgba(239,68,68,.4)',bg:'rgba(239,68,68,.05)',color:'#EF4444'},late:{border:'rgba(245,158,11,.4)',bg:'rgba(245,158,11,.05)',color:'#F59E0B'}};return(<div><Card title="✅ Mark Attendance" icon="✅" action={<Btn type="outline" size="sm" icon="📊" onClick={()=>openSheet('attendance')}>Sheet</Btn>}><Grid gap={18} style={{marginBottom:22}}><Sel label="Batch" value={selB} onChange={e=>loadC(e.target.value)}><option value="">Select</option>{batches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</Sel><Sel label="Class" value={selC} onChange={e=>loadS(e.target.value)}><option value="">Select</option>{classes.map(c=><option key={c.id} value={c.id}>C{c.class_number} — {c.title}</option>)}</Sel></Grid>{students.length>0&&<><div style={{display:'flex',gap:10,marginBottom:18}}><Btn type="success" size="sm" onClick={()=>markAll('present')}>✅ All Present</Btn><Btn type="danger" size="sm" onClick={()=>markAll('absent')}>❌ All Absent</Btn><Btn type="warning" size="sm" onClick={()=>markAll('late')}>⏰ Late</Btn></div><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(135px,1fr))',gap:12,marginBottom:22}}>{students.map(s=>{const st=att[s.id]||'absent';const c=attColors[st]||attColors.absent;return(<div key={s.id} onClick={()=>toggle(s.id)} style={{background:c.bg,border:`1.5px solid ${c.border}`,borderRadius:14,padding:16,textAlign:'center',cursor:'pointer',transition:tr}}><Av name={s.full_name} size={44}/><div style={{fontSize:12,fontWeight:700,marginTop:9,color:dark?'#E5E7EB':'#1F2937'}}>{s.full_name.split(' ')[0]}</div><div style={{fontSize:10,textTransform:'uppercase',letterSpacing:1.2,marginTop:5,color:c.color,fontWeight:700}}>{st}</div></div>)})}</div><Btn onClick={save} disabled={saving} loading={saving}>{saving?'Saving...':'💾 Save & Sync'}</Btn></>}</Card><Card title="📊 Report" icon="📊" action={report.length>0?<Btn type="success" size="sm" onClick={()=>exportXLS(report.map(s=>({Student:s.full_name,Present:s.present,Total:s.total,'%':s.pct+'%'})),'Attendance.xlsx')} icon="📊">Export</Btn>:null}><Sel label="Batch" value={repB} onChange={e=>loadReport(e.target.value)}><option value="">Select</option>{batches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</Sel>{report.length>0&&<Tbl headers={['Student','Present','Total','Attendance','Status']}>{report.map((s,i)=>(<TR key={s.id} delay={i*.04}><TD><div style={{display:'flex',alignItems:'center',gap:8}}><Av name={s.full_name} size={32}/><span style={{fontWeight:600}}>{s.full_name}</span></div></TD><TD style={{color:'#10B981',fontWeight:700}}>{s.present}</TD><TD>{s.total}</TD><TD><div style={{display:'flex',alignItems:'center',gap:10}}><div style={{width:85}}><PBar value={s.present} max={s.total}/></div><span style={{fontWeight:700,color:attColor(s.pct)}}>{s.pct}%</span></div></TD><TD><Bdg type={s.pct>=80?'success':s.pct>=60?'warning':'danger'} dot>{s.pct>=80?'Good':'<80%'}</Bdg></TD></TR>))}</Tbl>}</Card></div>)}
 
@@ -2061,10 +2177,10 @@ function AssignmentsPage(){
     const data={title:form.title,description:form.description||'',batch_id:form.batch_id,class_id:form.class_id||null,due_date:form.due_date,total_marks:parseInt(form.total_marks)||100}
     if(form.id){
       await sb.from('assignments').update(data).eq('id',form.id)
-      toast.success('Updated! ✅')
+      logAction('UPDATE','Assignment',form.title||'');toast.success('Updated! ✅')
     }else{
       await sb.from('assignments').insert(data)
-      toast.success('Created! 📝')
+      logAction('CREATE','Assignment',form.title||'');toast.success('Created! 📝')
     }
     setModal(false);load()
   }
@@ -2105,7 +2221,7 @@ function AssignmentsPage(){
       <Tbl headers={['Title','Batch','Class','Due','Marks','Actions']} empty={filtered.length===0?<Empty icon="📝" title="No assignments"/>:null}>
         {filtered.map((a,i)=>(
           <TR key={a.id} delay={i*.04}>
-            <TD style={{fontWeight:600,color:dark?'#E5E7EB':'#1F2937'}}>{a.title}</TD>
+            <TD style={{fontWeight:600,maxWidth:230,color:dark?'#E5E7EB':'#1F2937',whiteSpace:'normal',wordBreak:'break-word',lineHeight:1.45,overflow:'hidden',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical'}}>{a.title}</TD>
             <TD style={{fontSize:12}}>{batches.find(b=>b.id===a.batch_id)?.name||'—'}</TD>
             <TD style={{fontSize:12}}>{classes.find(c=>c.id===a.class_id)?'C'+classes.find(c=>c.id===a.class_id)?.class_number:'—'}</TD>
             <TD style={{fontSize:12}}>{fmtDT(a.due_date)}</TD>
@@ -2157,7 +2273,18 @@ function SubmissionsPage(){
   const load=useCallback(async()=>{setLoading(true);const[s,st,a]=await Promise.all([sb.from('submissions').select('*').order('submitted_at',{ascending:false}),sb.from('students').select('*'),sb.from('assignments').select('*').order('created_at')]);setSubs(s.data||[]);setStudents(st.data||[]);setAssignments(a.data||[]);setLoading(false)},[])
   useEffect(()=>{load()},[load])
   
-  const saveGrade=async()=>{await sb.from('submissions').update({marks_obtained:parseFloat(form.marks),feedback:form.feedback,status:'graded'}).eq('id',form.id);toast.success('Graded! ✅');setModal(null);load()}
+  const saveGrade=async()=>{
+    let marks=parseFloat(form.marks)
+    // Rubric auto-calc if rubric scores present
+    const rs=RUBRIC_FIELDS.map(([k,,])=>parseFloat(form['r_'+k])).filter(v=>!isNaN(v)&&v>=0)
+    if(rs.length===RUBRIC_FIELDS.length){ marks=rs.reduce((a,b)=>a+b,0) }
+    if(isNaN(marks)){toast.error('Enter marks');return}
+    const rubricObj={}
+    RUBRIC_FIELDS.forEach(([k,,])=>{ if(form['r_'+k]!==''&&form['r_'+k]!==undefined) rubricObj[k]=parseFloat(form['r_'+k]) })
+    await sb.from('submissions').update({marks_obtained:marks,feedback:form.feedback,status:'graded',rubric:Object.keys(rubricObj).length?JSON.stringify(rubricObj):null}).eq('id',form.id)
+    logAction('GRADE','Submission',`Marks ${marks}/${form.total}`,'')
+    toast.success('Graded! ✅');setModal(null);load()
+  }
   
   const deleteSubmission = async (id, studentName) => {
     const ok = await confirm({ title: 'Delete Submission?', message: `Delete submission by ${studentName}? This cannot be undone.`, type: 'danger', confirmText: 'Delete', icon: '🗑️' })
@@ -2215,7 +2342,7 @@ function SubmissionsPage(){
           return(
             <TR key={s.id} delay={i*.04}>
               <TD><div style={{display:'flex',alignItems:'center',gap:8}}><Av name={st?.full_name||'?'} size={32}/><span style={{fontWeight:600,fontSize:13,color:dark?'#E5E7EB':'#1F2937'}}>{st?.full_name||'—'}</span></div></TD>
-              <TD style={{fontSize:12}}>{a?.title||'—'}</TD>
+              <TD style={{fontSize:12,maxWidth:190,whiteSpace:'normal',wordBreak:'break-word',lineHeight:1.4,overflow:'hidden',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical'}}>{a?.title||'—'}</TD>
               <TD style={{fontSize:12}}>{fmtDT(s.submitted_at)}</TD>
               <TD>
                 {links.length > 0 ? (
@@ -2230,7 +2357,7 @@ function SubmissionsPage(){
               <TD><Bdg type={s.marks_obtained!=null?'success':'warning'} dot>{s.marks_obtained!=null?'Graded':'Pending'}</Bdg></TD>
               <TD>
                 <div style={{display:'flex',gap:6}}>
-                  <Btn type="outline" size="xs" onClick={()=>{setForm({id:s.id,marks:s.marks_obtained||'',feedback:s.feedback||'',links,text:s.submission_text,total:a?.total_marks||100});setModal('grade')}}>✏️</Btn>
+                  <Btn type="outline" size="xs" onClick={()=>{(()=>{let rub={};try{rub=s.rubric?JSON.parse(s.rubric):{}}catch{rub={}};const f={id:s.id,marks:s.marks_obtained||'',feedback:s.feedback||'',links:parseLinks(s.submission_link),text:s.submission_text,total:a?.total_marks||100};RUBRIC_FIELDS.forEach(([k])=>{f['r_'+k]=rub[k]!==undefined?String(rub[k]):''});setForm(f);setModal('grade')})()}}>✏️</Btn>
                   <Btn type="danger" size="xs" onClick={()=>deleteSubmission(s.id,st?.full_name||'Student')}>🗑️</Btn>
                 </div>
               </TD>
@@ -2252,15 +2379,30 @@ function SubmissionsPage(){
         </div>
       )}
       {form.text && <div style={{...getGlassLight(dark),borderRadius:10,padding:14,marginBottom:18,fontSize:12,color:'#9CA3AF'}}>📝 {form.text}</div>}
+      <div style={{marginBottom:18}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+          <label style={{fontSize:11,fontWeight:700,color:'#6B7280',textTransform:'uppercase',letterSpacing:1.2}}>🎯 Rubric (optional — auto total)</label>
+          <button onClick={()=>{const d={};RUBRIC_FIELDS.forEach(([k,,max])=>d['r_'+k]=String(max));let sum=RUBRIC_FIELDS.reduce((a,[,,m])=>a+m,0);setForm(f=>({...f,...d,marks:String(sum)}))}} style={{background:'rgba(16,185,129,.08)',border:'1px solid rgba(16,185,129,.18)',color:'#10B981',fontSize:10,fontWeight:700,padding:'5px 11px',borderRadius:8,cursor:'pointer',fontFamily:"'Inter',sans-serif"}}>Full Marks</button>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}} className="mf">
+          {RUBRIC_FIELDS.map(([k,label,max])=>(
+            <div key={k}>
+              <div style={{fontSize:10,color:'#6B7280',fontWeight:700,marginBottom:5}}>{label} <span style={{color:'#4B5563'}}>/ {max}</span></div>
+              <input type="number" min={0} max={max} value={form['r_'+k]??''} onChange={e=>setForm({...form,['r_'+k]:e.target.value})}
+                style={{width:'100%',background:dark?'rgba(0,0,0,.3)':'#FAFAFA',border:`1.5px solid ${dark?'rgba(255,255,255,.06)':'rgba(0,0,0,.1)'}`,color:dark?'#E5E7EB':'#1F2937',padding:'9px 13px',borderRadius:10,fontSize:13,outline:'none',fontFamily:"'Inter',sans-serif"}}/>
+            </div>
+          ))}
+        </div>
+      </div>
       <Inp label={`Marks (out of ${form.total})`} type="number" value={form.marks} onChange={e=>setForm({...form,marks:e.target.value})}/>
       <TA label="Feedback" value={form.feedback} onChange={e=>setForm({...form,feedback:e.target.value})} placeholder="Great work! / Needs improvement..."/>
     </Modal>
   </>)
 }
 
-function RecordingsPage(){const[classes,setClasses]=useState([]);const[batches,setBatches]=useState([]);const[loading,setLoading]=useState(true);const[modal,setModal]=useState(null);const[form,setForm]=useState({});const[uploading,setUploading]=useState(false);const[filterBatch,setFilterBatch]=useState('');const{dark}=useTheme();const load=useCallback(async()=>{setLoading(true);const[c,b]=await Promise.all([sb.from('classes').select('*').order('class_number'),sb.from('batches').select('*')]);setClasses(c.data||[]);setBatches(b.data||[]);setLoading(false)},[]);useEffect(()=>{load()},[load]);const handleFile=async e=>{const file=e.target.files[0];if(!file)return;setUploading(true);try{const ext=file.name.split('.').pop();const url=await uploadFile(file,'recordings',`recordings/c${form.class_number||'x'}-${Date.now()}.${ext}`);setForm(f=>({...f,recording_url:url}));toast.success('Uploaded!')}catch{toast.error('Failed')}finally{setUploading(false);e.target.value=''}};const save=async()=>{if(!form.recording_url){toast.error('Add URL');return};await sb.from('classes').update({recording_url:form.recording_url,notes:form.notes,status:'completed'}).eq('id',form.id);toast.success('Saved!');setModal(null);load()};const filtered=filterBatch?classes.filter(c=>c.batch_id===filterBatch):classes;if(loading)return <SkeletonDashboard/>;return(<><Card title={`Recordings (${classes.filter(c=>c.recording_url).length}/${classes.length})`} icon="🎥" action={<select value={filterBatch} onChange={e=>setFilterBatch(e.target.value)} style={{background:'#0A0A0B',border:'1px solid rgba(255,255,255,.06)',color:'#E5E7EB',padding:'9px 14px',borderRadius:11,fontSize:12,fontFamily:"'Inter',sans-serif",outline:'none'}}><option value="">All</option>{batches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select>}>{filtered.map(c=>(<div key={c.id} className="ch" style={{display:'flex',alignItems:'center',gap:16,...getGlassLight(dark),borderRadius:14,padding:20,marginBottom:12}}><div style={{width:54,height:54,background:c.recording_url?'rgba(16,185,129,.08)':'rgba(255,215,0,.04)',borderRadius:14,display:'flex',alignItems:'center',justifyContent:'center',fontSize:24,flexShrink:0}}>{c.recording_url?'▶️':'📅'}</div><div style={{flex:1}}><div style={{fontSize:15,fontWeight:700,color:dark?'#E5E7EB':'#1F2937'}}>C{c.class_number} — {c.title}</div><div style={{fontSize:12,color:'#6B7280'}}>{batches.find(b=>b.id===c.batch_id)?.name||'—'} · {fmtDate(c.date)}</div></div><div style={{display:'flex',gap:8}}>{c.recording_url&&<a href={c.recording_url} target="_blank" rel="noreferrer" style={{background:G,color:'#000',padding:'8px 16px',borderRadius:10,fontSize:12,fontWeight:700,textDecoration:'none'}}>▶</a>}<Btn type="outline" size="sm" onClick={()=>{setForm({id:c.id,class_number:c.class_number,recording_url:c.recording_url||'',notes:c.notes||''});setModal('edit')}}>{c.recording_url?'✏️':'➕'}</Btn></div></div>))}{filtered.length===0&&<Empty icon="🎥" title="No classes"/>}</Card><Modal open={modal==='edit'} onClose={()=>setModal(null)} title="Recording" icon="🎥" footer={<><Btn type="ghost" onClick={()=>setModal(null)}>Cancel</Btn><Btn onClick={save}>💾 Save</Btn></>}><Inp label="URL" value={form.recording_url||''} onChange={e=>setForm({...form,recording_url:e.target.value})}/><div style={{display:'flex',alignItems:'center',gap:12,margin:'4px 0 22px'}}><div style={{flex:1,height:1,background:'rgba(255,255,255,.05)'}}/><span style={{fontSize:11,color:'#4B5563',fontWeight:700}}>OR UPLOAD</span><div style={{flex:1,height:1,background:'rgba(255,255,255,.05)'}}/></div><FileUp label="Video" accept="video/*,.mp4,.mov" uploading={uploading} onUpload={handleFile}/><TA label="Notes" value={form.notes||''} onChange={e=>setForm({...form,notes:e.target.value})}/></Modal></>)}
+function RecordingsPage(){const[classes,setClasses]=useState([]);const[batches,setBatches]=useState([]);const[loading,setLoading]=useState(true);const[modal,setModal]=useState(null);const[form,setForm]=useState({});const[uploading,setUploading]=useState(false);const[filterBatch,setFilterBatch]=useState('');const{dark}=useTheme();const load=useCallback(async()=>{setLoading(true);const[c,b]=await Promise.all([sb.from('classes').select('*').order('class_number'),sb.from('batches').select('*')]);setClasses(c.data||[]);setBatches(b.data||[]);setLoading(false)},[]);useEffect(()=>{load()},[load]);const handleFile=async e=>{const file=e.target.files[0];if(!file)return;setUploading(true);try{const ext=file.name.split('.').pop();const url=await uploadFile(file,'recordings',`recordings/c${form.class_number||'x'}-${Date.now()}.${ext}`);setForm(f=>({...f,recording_url:url}));toast.success('Uploaded!')}catch{toast.error('Failed')}finally{setUploading(false);e.target.value=''}};const save=async()=>{if(!form.recording_url){toast.error('Add URL');return};await sb.from('classes').update({recording_url:form.recording_url,notes:form.notes,status:'completed'}).eq('id',form.id);toast.success('Saved!');setModal(null);load()};const filtered=filterBatch?classes.filter(c=>c.batch_id===filterBatch):classes;if(loading)return <SkeletonDashboard/>;return(<><Card title={`Recordings (${classes.filter(c=>c.recording_url).length}/${classes.length})`} icon="🎥" action={<select value={filterBatch} onChange={e=>setFilterBatch(e.target.value)} style={{background:'#0A0A0B',border:'1px solid rgba(255,255,255,.06)',color:'#E5E7EB',padding:'9px 14px',borderRadius:11,fontSize:12,fontFamily:"'Inter',sans-serif",outline:'none'}}><option value="">All</option>{batches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select>}>{filtered.map(c=>(<div key={c.id} className="ch" style={{display:'flex',alignItems:'center',gap:16,...getGlassLight(dark),borderRadius:14,padding:20,marginBottom:12}}><div style={{width:54,height:54,background:c.recording_url?'rgba(16,185,129,.08)':'rgba(255,215,0,.04)',borderRadius:14,display:'flex',alignItems:'center',justifyContent:'center',fontSize:24,flexShrink:0}}>{c.recording_url?'▶️':'📅'}</div><div style={{flex:1}}><div style={{fontSize:15,fontWeight:700,color:dark?'#E5E7EB':'#1F2937',lineHeight:1.4,wordBreak:'break-word',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden'}}>C{c.class_number} — {c.title}</div><div style={{fontSize:12,color:'#6B7280'}}>{batches.find(b=>b.id===c.batch_id)?.name||'—'} · {fmtDate(c.date)}</div></div><div style={{display:'flex',gap:8}}>{c.recording_url&&<a href={c.recording_url} target="_blank" rel="noreferrer" style={{background:G,color:'#000',padding:'8px 16px',borderRadius:10,fontSize:12,fontWeight:700,textDecoration:'none'}}>▶</a>}<Btn type="outline" size="sm" onClick={()=>{setForm({id:c.id,class_number:c.class_number,recording_url:c.recording_url||'',notes:c.notes||''});setModal('edit')}}>{c.recording_url?'✏️':'➕'}</Btn></div></div>))}{filtered.length===0&&<Empty icon="🎥" title="No classes"/>}</Card><Modal open={modal==='edit'} onClose={()=>setModal(null)} title="Recording" icon="🎥" footer={<><Btn type="ghost" onClick={()=>setModal(null)}>Cancel</Btn><Btn onClick={save}>💾 Save</Btn></>}><Inp label="URL" value={form.recording_url||''} onChange={e=>setForm({...form,recording_url:e.target.value})}/><div style={{display:'flex',alignItems:'center',gap:12,margin:'4px 0 22px'}}><div style={{flex:1,height:1,background:'rgba(255,255,255,.05)'}}/><span style={{fontSize:11,color:'#4B5563',fontWeight:700}}>OR UPLOAD</span><div style={{flex:1,height:1,background:'rgba(255,255,255,.05)'}}/></div><FileUp label="Video" accept="video/*,.mp4,.mov" uploading={uploading} onUpload={handleFile}/><TA label="Notes" value={form.notes||''} onChange={e=>setForm({...form,notes:e.target.value})}/></Modal></>)}
 
-function AnnouncementsPage(){const[anns,setAnns]=useState([]);const[loading,setLoading]=useState(true);const[modal,setModal]=useState(false);const[form,setForm]=useState({});const{dark}=useTheme();const load=useCallback(async()=>{setLoading(true);const{data}=await sb.from('announcements').select('*').order('created_at',{ascending:false});setAnns(data||[]);setLoading(false)},[]);useEffect(()=>{load()},[load]);const save=async()=>{if(!form.title||!form.content){toast.error('Required');return};if(form.id){await sb.from('announcements').update(form).eq('id',form.id)}else{await sb.from('announcements').insert({...form,priority:form.priority||'normal'})};toast.success('Posted! 📢');setModal(false);load()};const del=async id=>{await sb.from('announcements').delete().eq('id',id);toast.success('Deleted');load()};if(loading)return <SkeletonDashboard/>;return(<><Card title={`Announcements (${anns.length})`} icon="📢" action={<Btn onClick={()=>{setForm({priority:'normal'});setModal(true)}} icon="➕">New</Btn>}>{anns.length===0?<Empty icon="📢" title="No announcements"/>:anns.map((a,i)=>(<div key={a.id} style={{...getGlassLight(dark),borderRadius:14,padding:22,marginBottom:14,borderLeft:'3px solid #FFD700',animation:`fadeIn .4s ease ${i*.08}s both`}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:10}}><div style={{fontSize:16,fontWeight:700,color:dark?'#E5E7EB':'#1F2937'}}>{a.title}</div><div style={{display:'flex',gap:8}}><Bdg type={a.priority==='urgent'?'danger':a.priority==='important'?'warning':'info'}>{a.priority}</Bdg><Btn type="outline" size="xs" onClick={()=>{setForm(a);setModal(true)}}>✏️</Btn><Btn type="danger" size="xs" onClick={()=>del(a.id)}>🗑</Btn></div></div><div style={{fontSize:13,color:'#9CA3AF',lineHeight:1.7}}>{a.content}</div><div style={{fontSize:11,color:'#374151',marginTop:8}}>{ago(a.created_at)}</div></div>))}</Card><Modal open={modal} onClose={()=>setModal(false)} title={form.id?'Edit':'New'} icon="📢" footer={<><Btn type="ghost" onClick={()=>setModal(false)}>Cancel</Btn><Btn onClick={save}>📢 Post</Btn></>}><Inp label="Title" required value={form.title||''} onChange={e=>setForm({...form,title:e.target.value})}/><TA label="Content" required value={form.content||''} onChange={e=>setForm({...form,content:e.target.value})} style={{minHeight:130}}/><Sel label="Priority" value={form.priority||'normal'} onChange={e=>setForm({...form,priority:e.target.value})}><option value="normal">Normal</option><option value="important">Important</option><option value="urgent">Urgent</option></Sel></Modal></>)}
+function AnnouncementsPage(){const[anns,setAnns]=useState([]);const[loading,setLoading]=useState(true);const[modal,setModal]=useState(false);const[form,setForm]=useState({});const{dark}=useTheme();const load=useCallback(async()=>{setLoading(true);const{data}=await sb.from('announcements').select('*').order('created_at',{ascending:false});setAnns(data||[]);setLoading(false)},[]);useEffect(()=>{load()},[load]);const save=async()=>{if(!form.title||!form.content){toast.error('Required');return};if(form.id){await sb.from('announcements').update(form).eq('id',form.id)}else{await sb.from('announcements').insert({...form,priority:form.priority||'normal'})};logAction('CREATE','Announcement',form.title||'');toast.success('Posted! 📢');setModal(false);load()};const del=async id=>{await sb.from('announcements').delete().eq('id',id);toast.success('Deleted');load()};if(loading)return <SkeletonDashboard/>;return(<><Card title={`Announcements (${anns.length})`} icon="📢" action={<Btn onClick={()=>{setForm({priority:'normal'});setModal(true)}} icon="➕">New</Btn>}>{anns.length===0?<Empty icon="📢" title="No announcements"/>:anns.map((a,i)=>(<div key={a.id} style={{...getGlassLight(dark),borderRadius:14,padding:22,marginBottom:14,borderLeft:'3px solid #FFD700',animation:`fadeIn .4s ease ${i*.08}s both`}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:10}}><div style={{fontSize:16,fontWeight:700,color:dark?'#E5E7EB':'#1F2937'}}>{a.title}</div><div style={{display:'flex',gap:8}}><Bdg type={a.priority==='urgent'?'danger':a.priority==='important'?'warning':'info'}>{a.priority}</Bdg><Btn type="outline" size="xs" onClick={()=>{setForm(a);setModal(true)}}>✏️</Btn><Btn type="danger" size="xs" onClick={()=>del(a.id)}>🗑</Btn></div></div><div style={{fontSize:13,color:'#9CA3AF',lineHeight:1.7}}>{a.content}</div><div style={{fontSize:11,color:'#374151',marginTop:8}}>{ago(a.created_at)}</div></div>))}</Card><Modal open={modal} onClose={()=>setModal(false)} title={form.id?'Edit':'New'} icon="📢" footer={<><Btn type="ghost" onClick={()=>setModal(false)}>Cancel</Btn><Btn onClick={save}>📢 Post</Btn></>}><Inp label="Title" required value={form.title||''} onChange={e=>setForm({...form,title:e.target.value})}/><TA label="Content" required value={form.content||''} onChange={e=>setForm({...form,content:e.target.value})} style={{minHeight:130}}/><Sel label="Priority" value={form.priority||'normal'} onChange={e=>setForm({...form,priority:e.target.value})}><option value="normal">Normal</option><option value="important">Important</option><option value="urgent">Urgent</option></Sel></Modal></>)}
 
 function CertificatesPage(){const[students,setStudents]=useState([]);const[loading,setLoading]=useState(true);const[search,setSearch]=useState('');const{dark}=useTheme();useEffect(()=>{sb.from('students').select('*').order('full_name').then(r=>{setStudents(r.data||[]);setLoading(false)})},[]);const gen=s=>{const d=new Date().toLocaleDateString('en-PK',{day:'2-digit',month:'long',year:'numeric'});const w=window.open('','_blank');w.document.write(`<!DOCTYPE html><html><head><title>Certificate</title><style>@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap');*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Poppins',sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f9f9f9}.cert{width:800px;border:10px solid #FFD700;padding:50px;text-align:center;background:#fff}.inner{border:2px solid #FFD700;padding:40px}@media print{body{background:#fff}}</style></head><body><div class="cert"><div class="inner"><div style="font-size:11px;letter-spacing:5px;color:#888;text-transform:uppercase;margin-bottom:14px">AEMTECH INSTITUTE</div><div style="font-size:34px;font-weight:800;color:#FFD700;margin-bottom:8px">Certificate of Completion</div><div style="color:#666;margin-bottom:20px">This is to certify that</div><div style="font-size:32px;font-weight:800;border-bottom:2px solid #FFD700;padding-bottom:10px;display:inline-block;margin-bottom:10px">${s.full_name}</div>${s.father_name?'<div style="font-size:14px;color:#888;margin-bottom:10px">'+(s.gender==='female'?'D/O':'S/O')+' '+s.father_name+'</div>':''}<div style="font-size:17px;font-weight:700;margin-bottom:4px">Digital Business & AI Master Program</div><div style="color:#888;margin-bottom:30px;font-size:13px">Learn · Design · Build · Market · Earn</div><div style="display:flex;justify-content:space-between;padding-top:16px;border-top:1px solid #eee"><div><div style="font-size:10px;color:#888">DATE</div><div style="font-weight:700">${d}</div></div><div style="font-size:40px">🎓</div><div style="text-align:right"><div style="font-size:10px;color:#888">DIRECTOR</div><div style="font-weight:700">AEMTECH Institute</div></div></div></div></div><script>window.onload=()=>window.print()<\/script></body></html>`);w.document.close()};const filtered=students.filter(s=>!search||s.full_name?.toLowerCase().includes(search.toLowerCase()));if(loading)return <SkeletonDashboard/>;return <Card title="🎓 Certificates" icon="🎓" action={<Search value={search} onChange={e=>setSearch(e.target.value)}/>}><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(165px,1fr))',gap:16}}>{filtered.map(s=>(<div key={s.id} className="ch" style={{...getGlassLight(dark),borderRadius:16,padding:22,textAlign:'center'}}><Av name={s.full_name} size={54} glow/><div style={{fontSize:14,fontWeight:700,marginTop:14,marginBottom:4,color:dark?'#E5E7EB':'#1F2937'}}>{s.full_name}</div><div style={{fontSize:11,color:'#4B5563',marginBottom:10}}>{s.city||'Pakistan'}</div><Bdg type={statusBadge(s.status)} dot>{s.status}</Bdg><div style={{marginTop:14}}><Btn onClick={()=>gen(s)} size="sm" full>🎓 Generate</Btn></div></div>))}{filtered.length===0&&<Empty icon="🎓" title="No students"/>}</div></Card>}
 
@@ -2538,7 +2680,7 @@ function StudentAttendancePage() {
           {classes.map((c, i) => (
             <TR key={c.id} delay={i * .03}>
               <TD><Bdg type="gold">C{c.class_number}</Bdg></TD>
-              <TD style={{ fontSize: 13, color: dark ? '#E5E7EB' : '#1F2937' }}>{c.title}</TD>
+              <TD style={{ fontSize: 13, color: dark ? '#E5E7EB' : '#1F2937', maxWidth: 240, whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.4 }}>{c.title}</TD>
               <TD style={{ fontSize: 12 }}>{fmtDate(c.date)}</TD>
               <TD><Bdg type={statusBadge(attMap[c.id] || 'pending')} dot>{attMap[c.id] || 'Not Marked'}</Bdg></TD>
             </TR>
@@ -2753,7 +2895,7 @@ function StudentRecordingsPage() {
           <div key={c.id} className="ch" style={{ display: 'flex', alignItems: 'center', gap: 18, ...getGlassLight(dark), borderRadius: 14, padding: 20, marginBottom: 12 }}>
             <div style={{ width: 56, height: 56, background: c.recording_url ? 'rgba(16,185,129,.08)' : dark ? 'rgba(255,255,255,.02)' : 'rgba(0,0,0,.02)', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, flexShrink: 0 }}>{c.recording_url ? '▶️' : '🔒'}</div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: dark ? '#E5E7EB' : '#1F2937', marginBottom: 4 }}>Class {c.class_number} — {c.title}</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: dark ? '#E5E7EB' : '#1F2937', marginBottom: 4, lineHeight: 1.4, wordBreak: 'break-word', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>Class {c.class_number} — {c.title}</div>
               <div style={{ fontSize: 12, color: '#6B7280' }}>{fmtDate(c.date)}</div>
               {c.notes && <div style={{ fontSize: 11, color: '#4B5563', marginTop: 4 }}>{c.notes}</div>}
             </div>
@@ -3464,6 +3606,28 @@ function QuizAdminPage() {
   const updateQ = (i, field, val) => { const q = [...questions]; if (field === 'question') q[i].question = val; else if (field === 'correct') q[i].correct = parseInt(val); else { q[i].options[parseInt(field)] = val }; setQuestions(q) }
   const removeQ = (i) => setQuestions(questions.filter((_, idx) => idx !== i))
 
+  // ═══ QUESTION BANK ═══
+  const QB_KEY = 'aemtech_question_bank'
+  const [bank, setBank] = useState(() => { if (typeof window === 'undefined') return []; try { return JSON.parse(localStorage.getItem(QB_KEY) || '[]') } catch { return [] } })
+  const [bankOpen, setBankOpen] = useState(false)
+
+  const saveToBank = () => {
+    const valid = questions.filter(q => q.question && q.options.every(o => o))
+    if (valid.length === 0) { toast.error('No valid questions'); return }
+    const next = [...bank, ...valid.map(q => ({ id: Date.now() + Math.random(), ...q }))]
+    setBank(next); localStorage.setItem(QB_KEY, JSON.stringify(next.slice(0, 300)))
+    toast.success(`${valid.length} questions saved to bank! 🏦`)
+  }
+  const addFromBank = (q) => { setQuestions(p => [...p, { question: q.question, options: [...q.options], correct: q.correct }]); toast.success('Question added! ➕'); setBankOpen(false) }
+  const addRandomFromBank = () => {
+    if (bank.length === 0) { toast.error('Bank khali hai'); return }
+    const shuffled = [...bank].sort(() => Math.random() - .5).slice(0, 5)
+    setQuestions(p => [...p, ...shuffled.map(q => ({ question: q.question, options: [...q.options], correct: q.correct }))])
+    toast.success(`5 random questions added! 🎲`); setBankOpen(false)
+  }
+  const delFromBank = (id) => { const next = bank.filter(q => q.id !== id); setBank(next); localStorage.setItem(QB_KEY, JSON.stringify(next)) }
+  const shuffleCurrent = () => { setQuestions(p => [...p].sort(() => Math.random() - .5)); toast.success('Questions shuffled! 🔀') }
+
   const save = async () => {
     if (!form.title || !form.batch_id) { toast.error('Title and batch required'); return }
     if (questions.length === 0) { toast.error('Add at least 1 question'); return }
@@ -3558,7 +3722,12 @@ function QuizAdminPage() {
         <div style={{ marginTop: 20, borderTop: `1px solid ${dark ? 'rgba(255,215,0,.06)' : 'rgba(0,0,0,.06)'}`, paddingTop: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: '#FFD700' }}>📝 Questions ({questions.length})</div>
-            <Btn type="outline" size="sm" onClick={addQuestion} icon="➕">Add Question</Btn>
+            <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+              <Btn type="outline" size="sm" onClick={addQuestion} icon="➕">Add</Btn>
+              <Btn type="ghost" size="sm" onClick={shuffleCurrent} icon="🔀" disabled={questions.length < 2}>Shuffle</Btn>
+              <Btn type="success" size="sm" onClick={saveToBank} icon="🏦">Save to Bank</Btn>
+              <Btn type="warning" size="sm" onClick={() => setBankOpen(true)} icon="📚">Bank ({bank.length})</Btn>
+            </div>
           </div>
 
           {questions.map((q, qi) => (
@@ -3580,6 +3749,30 @@ function QuizAdminPage() {
             </div>
           ))}
         </div>
+      </Modal>
+
+      {/* Question Bank Modal */}
+      <Modal open={bankOpen} onClose={() => setBankOpen(false)} title={`📚 Question Bank (${bank.length})`} icon="📚" footer={<><Btn type="ghost" onClick={() => setBankOpen(false)}>Close</Btn><Btn type="warning" onClick={addRandomFromBank} icon="🎲" disabled={bank.length === 0}>Add 5 Random</Btn></>}>
+        {bank.length === 0 ? <Empty icon="📚" title="Bank khali hai" sub="Questions save karein to yahan store honge — dobara use kar sakenge"/> : (
+          <div style={{ maxHeight: 380, overflowY: 'auto' }} className="cs">
+            {bank.map((q, i) => (
+              <div key={q.id} style={{ ...getGlassLight(dark), borderRadius: 12, padding: 15, marginBottom: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, marginBottom: 8 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: dark ? '#E5E7EB' : '#1F2937', flex: 1, whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.45 }}>{i + 1}. {q.question}</div>
+                  <div style={{ display: 'flex', gap: 5 }}>
+                    <Btn type="success" size="xs" onClick={() => addFromBank(q)}>➕</Btn>
+                    <Btn type="danger" size="xs" onClick={() => delFromBank(q.id)}>🗑</Btn>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {q.options.map((o, oi) => (
+                    <span key={oi} style={{ fontSize: 10, padding: '3px 9px', borderRadius: 7, background: oi === q.correct ? 'rgba(16,185,129,.12)' : dark ? 'rgba(255,255,255,.03)' : 'rgba(0,0,0,.03)', color: oi === q.correct ? '#10B981' : '#6B7280', fontWeight: 700, border: `1px solid ${oi === q.correct ? 'rgba(16,185,129,.2)' : 'transparent'}` }}>{String.fromCharCode(65 + oi)}. {o}</span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </Modal>
     </div>
   )
@@ -4014,7 +4207,1005 @@ ${gradedSubs.length > 0 ? `<div style="margin-top:12px;padding:12px 16px;backgro
   )
 }
 
-const pageTitles = { dashboard: '📊 Dashboard', students: '👥 Students', admissions: '📋 Admissions', batches: '🏫 Batches', classes: '📅 Classes', attendance: '✅ Attendance', assignments: '📝 Assignments', submissions: '📤 Submissions', recordings: '🎥 Recordings', fees: '💰 Fee Management', announcements: '📢 Announcements', certificates: '🎓 Certificates', leaderboard: '🏆 Leaderboard', sync: '🔄 Sheet Sync', excel: '📈 Import/Export', settings: '⚙️ Settings', certificate: '🎓 My Certificate', profile: '👤 My Profile', timetable: '🗓 Timetable', quizzes: '🧠 Quizzes', analytics: '📈 Analytics', progress: '📄 Progress Report' }
+// ═══════════════════════════════════════
+// TASK CENTER — Daily Admin Tasks
+// ═══════════════════════════════════════
+function TaskCenterPage() {
+  const { dark } = useTheme(); const { setPage } = usePage()
+  const [data, setData] = useState(null); const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    (async () => {
+      const today = new Date().toISOString().split('T')[0]
+      const [adm, subs, students, classes, att, assignments, payments] = await Promise.all([
+        sb.from('admissions').select('*').eq('status', 'pending'),
+        sb.from('submissions').select('*'),
+        sb.from('students').select('*'),
+        sb.from('classes').select('*'),
+        sb.from('attendance').select('*'),
+        sb.from('assignments').select('*'),
+        sb.from('fee_payments').select('*'),
+      ])
+      const allStudents = students.data || []
+      const allClasses = classes.data || []
+      const allAtt = att.data || []
+      const allAsns = assignments.data || []
+
+      // Today's classes
+      const todayClasses = allClasses.filter(c => c.date === today)
+      // Ungraded submissions
+      const ungraded = (subs.data || []).filter(s => s.marks_obtained == null)
+      // Overdue fees (students with due > 0)
+      const feeDue = allStudents.filter(s => (s.fee_amount || 0) - (s.fee_paid || 0) > 0 && s.status === 'active')
+      // Assignments due soon (next 3 days)
+      const soon = new Date(Date.now() + 3 * 86400000).toISOString()
+      const upcomingAsn = allAsns.filter(a => a.due_date >= today && a.due_date <= soon)
+      // Low attendance (< 80%)
+      const lowAtt = allStudents.filter(s => {
+        if (s.status !== 'active') return false
+        const total = allClasses.filter(c => c.batch_id === s.batch_id).length
+        if (total === 0) return false
+        const present = allAtt.filter(a => a.student_id === s.id && a.status === 'present').length
+        return (present / total) * 100 < 80
+      }).map(s => {
+        const total = allClasses.filter(c => c.batch_id === s.batch_id).length
+        const present = allAtt.filter(a => a.student_id === s.id && a.status === 'present').length
+        return { ...s, pct: total > 0 ? Math.round((present / total) * 100) : 0 }
+      })
+      // Overdue fee payments
+      const overduePayments = (payments.data || []).filter(p => p.status === 'overdue')
+      // Missing recordings
+      const noRecording = allClasses.filter(c => !c.recording_url && c.date < today)
+
+      setData({ todayClasses, ungraded, feeDue, upcomingAsn, lowAtt, overduePayments, noRecording, pendingAdm: adm.data || [] })
+      setLoading(false)
+    })()
+  }, [])
+
+  if (loading) return <SkeletonDashboard />
+  if (!data) return null
+
+  const tasks = [
+    { key: 'admissions', icon: '📋', title: 'Pending Admissions', count: data.pendingAdm.length, color: '#F59E0B', page: 'admissions', desc: 'Applications waiting for review' },
+    { key: 'classes', icon: '📅', title: "Today's Classes", count: data.todayClasses.length, color: '#3B82F6', page: 'classes', desc: data.todayClasses.length > 0 ? data.todayClasses.map(c => 'C' + c.class_number).join(', ') : 'No classes today' },
+    { key: 'ungraded', icon: '📤', title: 'Ungraded Submissions', count: data.ungraded.length, color: '#8B5CF6', page: 'submissions', desc: 'Need to be graded' },
+    { key: 'fees', icon: '💰', title: 'Fee Due Students', count: data.feeDue.length, color: '#EF4444', page: 'fees', desc: currency(data.feeDue.reduce((a, s) => a + ((s.fee_amount || 0) - (s.fee_paid || 0)), 0)) + ' outstanding' },
+    { key: 'attendance', icon: '🚨', title: 'Low Attendance', count: data.lowAtt.length, color: '#EC4899', page: 'alerts', desc: 'Students below 80%' },
+    { key: 'assignments', icon: '📝', title: 'Assignments Due Soon', count: data.upcomingAsn.length, color: '#10B981', page: 'assignments', desc: 'Due within 3 days' },
+    { key: 'recordings', icon: '🎥', title: 'Missing Recordings', count: data.noRecording.length, color: '#6B7280', page: 'recordings', desc: 'Past classes without recording' },
+  ]
+
+  const totalTasks = tasks.reduce((a, t) => a + t.count, 0)
+
+  return (
+    <div className="page-enter">
+      {/* Summary */}
+      <div style={{ ...getGlass(dark), borderRadius: 24, padding: 'clamp(22px,3vw,36px)', marginBottom: 26, background: dark ? 'linear-gradient(135deg,rgba(255,215,0,.06),rgba(12,12,14,.85))' : 'linear-gradient(135deg,rgba(255,215,0,.08),rgba(255,255,255,.95))', position: 'relative', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', top: -60, right: -60, width: 220, height: 220, borderRadius: '50%', background: 'radial-gradient(circle,rgba(255,215,0,.06),transparent)', pointerEvents: 'none' }} />
+        <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 20 }}>
+          <div>
+            <div style={{ fontSize: 12, color: '#6B7280', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 8 }}>Daily Overview</div>
+            <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 'clamp(24px,3vw,34px)', fontWeight: 900, marginBottom: 8 }}>
+              <span style={{ background: G, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{totalTasks} tasks pending</span>
+            </div>
+            <div style={{ fontSize: 13, color: '#4B5563' }}>{new Date().toLocaleDateString('en-PK', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}</div>
+          </div>
+          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+            {[['✅', tasks.filter(t => t.count === 0).length, 'Done'], ['⏳', tasks.filter(t => t.count > 0).length, 'Pending']].map(([ic, n, l], i) => (
+              <div key={l} style={{ ...getGlassLight(dark), borderRadius: 16, padding: '16px 22px', textAlign: 'center' }}>
+                <div style={{ fontSize: 22 }}>{ic}</div>
+                <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 24, fontWeight: 900, color: i === 0 ? '#10B981' : '#FFD700' }}>{n}</div>
+                <div style={{ fontSize: 10, color: '#6B7280', textTransform: 'uppercase', letterSpacing: 1.2, fontWeight: 700 }}>{l}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Task Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(250px,1fr))', gap: 18 }}>
+        {tasks.map((t, i) => (
+          <div key={t.key} onClick={() => t.count > 0 && setPage(t.page)} className="ch" style={{
+            ...getGlass(dark), borderRadius: 20, padding: 24, cursor: t.count > 0 ? 'pointer' : 'default',
+            borderTop: `3px solid ${t.color}`, opacity: t.count === 0 ? .55 : 1,
+            animation: `fadeInUp .4s ease ${i * .05}s both`, position: 'relative', overflow: 'hidden',
+          }}>
+            <div style={{ position: 'absolute', top: -30, right: -30, width: 90, height: 90, borderRadius: '50%', background: `radial-gradient(circle,${t.color}10,transparent)`, pointerEvents: 'none' }} />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <div style={{ width: 52, height: 52, borderRadius: 15, background: `${t.color}12`, border: `1px solid ${t.color}25`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>{t.icon}</div>
+              <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 34, fontWeight: 900, color: t.count === 0 ? '#10B981' : t.color }}>{t.count === 0 ? '✓' : t.count}</div>
+            </div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: dark ? '#E5E7EB' : '#1F2937', marginBottom: 6 }}>{t.title}</div>
+            <div style={{ fontSize: 11, color: '#6B7280', lineHeight: 1.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.desc}</div>
+            {t.count > 0 && <div style={{ marginTop: 14, fontSize: 11, color: t.color, fontWeight: 700 }}>View →</div>}
+          </div>
+        ))}
+      </div>
+
+      {/* Today's classes detail */}
+      {data.todayClasses.length > 0 && (
+        <Card title={`📅 Today's Classes (${data.todayClasses.length})`} icon="📅" delay={.2} style={{ marginTop: 26 }} noPadding>
+          <Tbl headers={['#', 'Title', 'Time', 'Status']}>
+            {data.todayClasses.map((c, i) => (
+              <TR key={c.id} delay={i * .04}>
+                <TD><Bdg type="gold">C{c.class_number}</Bdg></TD>
+                <TD style={{ fontWeight: 600, color: dark ? '#E5E7EB' : '#1F2937' }}>{c.title}</TD>
+                <TD>{c.time || '—'}</TD>
+                <TD><Bdg type={statusBadge(c.status)} dot>{c.status}</Bdg></TD>
+              </TR>
+            ))}
+          </Tbl>
+        </Card>
+      )}
+
+      {/* Low attendance detail */}
+      {data.lowAtt.length > 0 && (
+        <Card title={`🚨 Low Attendance Students (${data.lowAtt.length})`} icon="🚨" delay={.25} style={{ marginTop: 22 }} noPadding>
+          <Tbl headers={['Student', 'Attendance', 'Status']}>
+            {data.lowAtt.slice(0, 10).map((s, i) => (
+              <TR key={s.id} delay={i * .04}>
+                <TD><div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><Av name={s.full_name} src={s.profile_image || null} size={32} /><span style={{ fontWeight: 600, color: dark ? '#E5E7EB' : '#1F2937' }}>{s.full_name}</span></div></TD>
+                <TD><div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><div style={{ width: 85 }}><PBar value={s.pct} max={100} /></div><span style={{ fontWeight: 700, color: attColor(s.pct) }}>{s.pct}%</span></div></TD>
+                <TD><Bdg type={s.pct >= 60 ? 'warning' : 'danger'} dot>{s.pct >= 60 ? 'Warning' : 'Critical'}</Bdg></TD>
+              </TR>
+            ))}
+          </Tbl>
+        </Card>
+      )}
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════
+// ATTENDANCE ALERTS — Low attendance + consecutive absences
+// ═══════════════════════════════════════
+function AttendanceAlertsPage() {
+  const { dark } = useTheme()
+  const [data, setData] = useState(null); const [loading, setLoading] = useState(true)
+  const [threshold, setThreshold] = useState(80)
+
+  useEffect(() => {
+    (async () => {
+      const [students, classes, att] = await Promise.all([
+        sb.from('students').select('*'),
+        sb.from('classes').select('*').order('class_number'),
+        sb.from('attendance').select('*'),
+      ])
+      const allStudents = students.data || []
+      const allClasses = classes.data || []
+      const allAtt = att.data || []
+
+      const rows = allStudents.filter(s => s.status === 'active').map(s => {
+        const myClasses = allClasses.filter(c => c.batch_id === s.batch_id)
+        const total = myClasses.length
+        const myAtt = allAtt.filter(a => a.student_id === s.id)
+        const present = myAtt.filter(a => a.status === 'present').length
+        const pct = total > 0 ? Math.round((present / total) * 100) : 0
+        // Consecutive absences (from latest class backwards)
+        const sortedAtt = myClasses.slice().reverse().map(c => myAtt.find(a => a.class_id === c.id)?.status)
+        let consec = 0
+        for (const st of sortedAtt) { if (st === 'absent') consec++; else break }
+        // Absent count
+        const absent = myAtt.filter(a => a.status === 'absent').length
+        const late = myAtt.filter(a => a.status === 'late').length
+        return { ...s, total, present, absent, late, pct, consec }
+      })
+      setData(rows); setLoading(false)
+    })()
+  }, [])
+
+  if (loading) return <SkeletonDashboard />
+
+  const critical = (data || []).filter(s => s.pct < 60)
+  const warning = (data || []).filter(s => s.pct >= 60 && s.pct < threshold)
+  const consecAbsent = (data || []).filter(s => s.consec >= 2)
+  const perfect = (data || []).filter(s => s.pct === 100 && s.total > 0)
+
+  return (
+    <div className="page-enter">
+      {/* Stats */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 18, marginBottom: 24 }}>
+        <Stat icon="🚨" value={critical.length} label="Critical (<60%)" color="#EF4444" />
+        <Stat icon="⚠️" value={warning.length} label={`Warning (<${threshold}%)`} color="#F59E0B" />
+        <Stat icon="🔴" value={consecAbsent.length} label="Consecutive Absent" color="#EC4899" />
+        <Stat icon="🏆" value={perfect.length} label="Perfect (100%)" color="#10B981" />
+      </div>
+
+      {/* Threshold selector */}
+      <div style={{ ...getGlassLight(dark), borderRadius: 14, padding: '16px 20px', marginBottom: 22, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 12, color: '#6B7280', fontWeight: 700 }}>⚠️ Alert Threshold:</span>
+        {[60, 70, 75, 80, 90].map(t => (
+          <button key={t} onClick={() => setThreshold(t)} style={{ padding: '7px 16px', borderRadius: 9, border: 'none', cursor: 'pointer', fontFamily: "'Inter',sans-serif", fontWeight: 700, fontSize: 12, transition: 'all .3s', background: threshold === t ? G : (dark ? 'rgba(255,255,255,.04)' : 'rgba(0,0,0,.04)'), color: threshold === t ? '#000' : '#6B7280' }}>{t}%</button>
+        ))}
+      </div>
+
+      {/* Consecutive absences */}
+      {consecAbsent.length > 0 && (
+        <Card title={`🔴 Consecutive Absences (${consecAbsent.length})`} icon="🔴" style={{ marginBottom: 22 }} noPadding>
+          <Tbl headers={['Student', 'Consecutive', 'Attendance', 'Action']}>
+            {consecAbsent.map((s, i) => (
+              <TR key={s.id} delay={i * .04}>
+                <TD><div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><Av name={s.full_name} src={s.profile_image || null} size={32} /><span style={{ fontWeight: 600, color: dark ? '#E5E7EB' : '#1F2937' }}>{s.full_name}</span></div></TD>
+                <TD><Bdg type="danger" dot>{s.consec} classes</Bdg></TD>
+                <TD><span style={{ fontWeight: 700, color: attColor(s.pct) }}>{s.pct}%</span></TD>
+                <TD>
+                  {s.phone && (
+                    <a href={`https://api.whatsapp.com/send?phone=${s.phone.replace(/\D/g, '').replace(/^0/, '92')}&text=${encodeURIComponent(`Assalam o Alaikum ${s.full_name}! Aap ${s.consec} classes se gayab hain. Koi masla ho to btayein. AEMTECH Institute`)}`} target="_blank" rel="noreferrer">
+                      <Btn type="success" size="xs" icon="💬">Notify</Btn>
+                    </a>
+                  )}
+                </TD>
+              </TR>
+            ))}
+          </Tbl>
+        </Card>
+      )}
+
+      {/* Critical + Warning list */}
+      <Card title={`🚨 Students Below ${threshold}% (${critical.length + warning.length})`} icon="🚨" noPadding>
+        <Tbl headers={['Student', 'Present', 'Absent', 'Late', 'Attendance', 'Status', 'Notify']} empty={critical.length + warning.length === 0 ? <Empty icon="✅" title="All students above threshold!" /> : null}>
+          {[...critical, ...warning].map((s, i) => (
+            <TR key={s.id} delay={i * .03}>
+              <TD><div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><Av name={s.full_name} src={s.profile_image || null} size={32} /><span style={{ fontWeight: 600, color: dark ? '#E5E7EB' : '#1F2937' }}>{s.full_name}</span></div></TD>
+              <TD style={{ color: '#10B981', fontWeight: 700 }}>{s.present}</TD>
+              <TD style={{ color: '#EF4444', fontWeight: 700 }}>{s.absent}</TD>
+              <TD style={{ color: '#F59E0B', fontWeight: 700 }}>{s.late}</TD>
+              <TD><div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><div style={{ width: 85 }}><PBar value={s.pct} max={100} /></div><span style={{ fontWeight: 700, color: attColor(s.pct) }}>{s.pct}%</span></div></TD>
+              <TD><Bdg type={s.pct < 60 ? 'danger' : 'warning'} dot>{s.pct < 60 ? 'Critical' : 'Warning'}</Bdg></TD>
+              <TD>
+                {s.phone && (
+                  <a href={`https://api.whatsapp.com/send?phone=${s.phone.replace(/\D/g, '').replace(/^0/, '92')}&text=${encodeURIComponent(`Assalam o Alaikum ${s.full_name}! Aapki attendance ${s.pct}% hai jo ${threshold}% se kam hai. Certificate ke liye 80% zaroori hai. AEMTECH Institute`)}`} target="_blank" rel="noreferrer">
+                    <Btn type="success" size="xs" icon="💬">Notify</Btn>
+                  </a>
+                )}
+              </TD>
+            </TR>
+          ))}
+        </Tbl>
+      </Card>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════
+// FEE LEDGER — Month-wise fee tracking
+// ═══════════════════════════════════════
+function FeeLedgerPage() {
+  const { dark } = useTheme()
+  const [students, setStudents] = useState([]); const [batches, setBatches] = useState([])
+  const [payments, setPayments] = useState([]); const [loading, setLoading] = useState(true)
+  const [selStudent, setSelStudent] = useState(''); const [modal, setModal] = useState(false); const [form, setForm] = useState({})
+  const { confirm } = useConfirm()
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    const [s, b, p] = await Promise.all([
+      sb.from('students').select('*').order('full_name'),
+      sb.from('batches').select('*'),
+      sb.from('fee_payments').select('*').order('year', { ascending: false }).order('month', { ascending: false }),
+    ])
+    setStudents(s.data || []); setBatches(b.data || []); setPayments(p.data || []); setLoading(false)
+  }, [])
+  useEffect(() => { load() }, [load])
+
+  const savePayment = async () => {
+    if (!form.student_id || !form.amount) { toast.error('Student and amount required'); return }
+    const student = students.find(s => s.id === form.student_id)
+    const newPaid = (student?.fee_paid || 0) + parseFloat(form.amount)
+    const newStatus = newPaid >= (student?.fee_amount || 0) ? 'paid' : newPaid > 0 ? 'partial' : 'pending'
+    await sb.from('fee_payments').insert({
+      student_id: form.student_id, month: form.month || MONTHS[new Date().getMonth()], year: form.year || new Date().getFullYear(),
+      amount: parseFloat(form.amount), paid_amount: parseFloat(form.amount), paid_date: new Date().toISOString().split('T')[0],
+      payment_method: form.payment_method || 'Cash', status: 'paid', receipt_number: 'RCP-' + Date.now().toString(36).toUpperCase(),
+    })
+    await sb.from('students').update({ fee_paid: newPaid, fee_status: newStatus }).eq('id', form.student_id)
+    toast.success('💰 Payment recorded!')
+    setModal(false); load()
+  }
+
+  const delPayment = async (id) => {
+    const ok = await confirm({ title: 'Delete Payment?', message: 'Yeh payment record delete hoga. Student ka paid amount automatically adjust nahi hoga.', type: 'danger', confirmText: 'Delete', icon: '🗑️' })
+    if (!ok) return
+    await sb.from('fee_payments').delete().eq('id', id)
+    toast.success('Deleted'); load()
+  }
+
+  if (loading) return <SkeletonDashboard />
+
+  const student = selStudent ? students.find(s => s.id === selStudent) : null
+  const myPayments = student ? payments.filter(p => p.student_id === student.id) : payments
+  const year = new Date().getFullYear()
+  const monthNames = MONTHS
+
+  return (
+    <div className="page-enter">
+      {/* Selector */}
+      <div style={{ display: 'flex', gap: 12, marginBottom: 22, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <div style={{ minWidth: 250 }}>
+          <Sel label="Select Student" value={selStudent} onChange={e => setSelStudent(e.target.value)}>
+            <option value="">📋 All Students ({payments.length} payments)</option>
+            {students.map(s => <option key={s.id} value={s.id}>{s.full_name} — {s.fee_status || 'pending'}</option>)}
+          </Sel>
+        </div>
+        <Btn onClick={() => { setForm({ student_id: selStudent, month: MONTHS[new Date().getMonth()], year, payment_method: 'Cash' }); setModal(true) }} icon="➕" size="sm">Record Payment</Btn>
+      </div>
+
+      {/* Student summary */}
+      {student && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 16, marginBottom: 22 }}>
+          {[
+            ['👤 Student', student.full_name, '#FFD700'],
+            ['🏫 Batch', batches.find(b => b.id === student.batch_id)?.name || '—', '#3B82F6'],
+            ['💰 Total Fee', currency(student.fee_amount), '#F59E0B'],
+            ['✅ Paid', currency(student.fee_paid), '#10B981'],
+            ['⚠️ Due', currency((student.fee_amount || 0) - (student.fee_paid || 0)), '#EF4444'],
+            ['📊 Status', (student.fee_status || 'pending').toUpperCase(), student.fee_status === 'paid' ? '#10B981' : student.fee_status === 'partial' ? '#F59E0B' : '#EF4444'],
+          ].map(([l, v, c]) => (
+            <div key={l} className="ch" style={{ ...getGlass(dark), borderRadius: 16, padding: 20, borderTop: `3px solid ${c}` }}>
+              <div style={{ fontSize: 10, color: '#6B7280', textTransform: 'uppercase', letterSpacing: 1.2, fontWeight: 700, marginBottom: 6 }}>{l}</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: c, fontFamily: "'Space Grotesk',sans-serif" }}>{v}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Monthly ledger grid */}
+      {student && (
+        <Card title={`📒 Monthly Ledger — ${year}`} icon="📒" style={{ marginBottom: 22 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(120px,1fr))', gap: 12 }}>
+            {monthNames.map((m, i) => {
+              const pay = payments.find(p => p.student_id === student.id && p.month === m && String(p.year) === String(year))
+              return (
+                <div key={m} style={{ ...getGlassLight(dark), borderRadius: 14, padding: 16, borderLeft: `3px solid ${pay ? '#10B981' : new Date().getMonth() === i ? '#F59E0B' : 'rgba(255,255,255,.05)'}` }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#6B7280', marginBottom: 6 }}>{m.substring(0, 3)}</div>
+                  {pay ? (
+                    <>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: '#10B981', fontFamily: "'Space Grotesk',sans-serif" }}>{currency(pay.paid_amount || pay.amount)}</div>
+                      <div style={{ fontSize: 9, color: '#10B981', marginTop: 3 }}>✓ {pay.payment_method || 'Paid'}</div>
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: '#4B5563', fontFamily: "'Space Grotesk',sans-serif" }}>—</div>
+                      <div style={{ fontSize: 9, color: new Date().getMonth() === i ? '#F59E0B' : '#4B5563', marginTop: 3 }}>{new Date().getMonth() === i ? 'Current' : 'Unpaid'}</div>
+                    </>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </Card>
+      )}
+
+      {/* Payment history */}
+      <Card title={`💳 Payment History (${myPayments.length})`} icon="💳" noPadding>
+        <Tbl headers={student ? ['Month', 'Year', 'Amount', 'Method', 'Date', 'Receipt', 'Actions'] : ['Student', 'Month', 'Year', 'Amount', 'Method', 'Date', 'Actions']} empty={myPayments.length === 0 ? <Empty icon="💳" title="No payments" /> : null}>
+          {myPayments.slice(0, 100).map((p, i) => {
+            const st = students.find(s => s.id === p.student_id)
+            return (
+              <TR key={p.id} delay={i * .02}>
+                {!student && <TD><div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><Av name={st?.full_name || '?'} size={30} /><span style={{ fontWeight: 600, fontSize: 13, color: dark ? '#E5E7EB' : '#1F2937' }}>{st?.full_name || '—'}</span></div></TD>}
+                <TD><Bdg type="gold">{p.month}</Bdg></TD>
+                <TD style={{ fontSize: 12 }}>{p.year}</TD>
+                <TD style={{ fontWeight: 700, color: '#10B981' }}>{currency(p.paid_amount || p.amount)}</TD>
+                <TD style={{ fontSize: 12 }}>{p.payment_method || 'Cash'}</TD>
+                <TD style={{ fontSize: 12 }}>{fmtDate(p.paid_date || p.created_at)}</TD>
+                {student && <TD style={{ fontSize: 11, color: '#6B7280' }}>{p.receipt_number?.substring(0, 12) || '—'}</TD>}
+                <TD><Btn type="danger" size="xs" onClick={() => delPayment(p.id)}>🗑</Btn></TD>
+              </TR>
+            )
+          })}
+        </Tbl>
+      </Card>
+
+      <Modal open={modal} onClose={() => setModal(false)} title="💰 Record Fee Payment" icon="💰" footer={<><Btn type="ghost" onClick={() => setModal(false)}>Cancel</Btn><Btn type="success" onClick={savePayment}>💰 Record Payment</Btn></>}>
+        <Sel label="Student" required value={form.student_id || ''} onChange={e => setForm({ ...form, student_id: e.target.value })}>
+          <option value="">Select Student</option>
+          {students.map(s => <option key={s.id} value={s.id}>{s.full_name} (Due: {currency((s.fee_amount || 0) - (s.fee_paid || 0))})</option>)}
+        </Sel>
+        <Grid>
+          <Sel label="Month" value={form.month || ''} onChange={e => setForm({ ...form, month: e.target.value })}>
+            {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
+          </Sel>
+          <Inp label="Year" type="number" value={form.year || year} onChange={e => setForm({ ...form, year: e.target.value })} />
+        </Grid>
+        <Grid>
+          <Inp label="Amount (PKR)" required type="number" value={form.amount || ''} onChange={e => setForm({ ...form, amount: e.target.value })} placeholder="5000" />
+          <Sel label="Payment Method" value={form.payment_method || 'Cash'} onChange={e => setForm({ ...form, payment_method: e.target.value })}>
+            {PAYMENT_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
+          </Sel>
+        </Grid>
+      </Modal>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════
+// STUDENT ID CARDS — with QR code
+// ═══════════════════════════════════════
+function IdCardsPage() {
+  const { dark } = useTheme()
+  const [students, setStudents] = useState([]); const [batches, setBatches] = useState([])
+  const [loading, setLoading] = useState(true); const [search, setSearch] = useState('')
+
+  useEffect(() => {
+    Promise.all([sb.from('students').select('*').order('full_name'), sb.from('batches').select('*')]).then(([s, b]) => {
+      setStudents(s.data || []); setBatches(b.data || []); setLoading(false)
+    })
+  }, [])
+
+  const genCard = (s) => {
+    const batch = batches.find(b => b.id === s.batch_id)
+    const sid = 'AEM-' + String(s.full_name || '').replace(/\s+/g, '').substring(0, 3).toUpperCase() + '-' + (s.id || '').substring(0, 6).toUpperCase()
+    // Simple QR-like pattern using canvas-free approach (visual matrix)
+    let seed = 0; for (let i = 0; i < (s.id || 'x').length; i++) seed = (seed * 31 + (s.id || 'x').charCodeAt(i)) % 99991
+    const cells = []
+    for (let i = 0; i < 144; i++) { seed = (seed * 1103515245 + 12345) % 2147483648; cells.push((seed >> 16) % 100 > 48) }
+    const qrHtml = `<div style="display:grid;grid-template-columns:repeat(12,6px);gap:1px;padding:5px;background:#fff;border-radius:4px;width:82px">${cells.map(c => `<div style="width:6px;height:6px;background:${c ? '#000' : '#fff'}"></div>`).join('')}</div>`
+    const w = window.open('', '_blank')
+    w.document.write(`<!DOCTYPE html><html><head><title>ID Card - ${s.full_name}</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',sans-serif;background:#e5e5e5;padding:30px;display:flex;flex-wrap:wrap;gap:24px;justify-content:center;align-items:flex-start}
+.card{width:340px;height:520px;border-radius:20px;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.2);position:relative;background:#0a0a0a;display:flex;flex-direction:column}
+.top{background:linear-gradient(135deg,#FFD700,#FFA500);padding:22px 24px;text-align:center;position:relative}
+.top .logo{font-size:22px;letter-spacing:5px;font-weight:900;color:#000}
+.top .inst{font-size:8px;letter-spacing:3px;color:rgba(0,0,0,.6);font-weight:700;margin-top:2px}
+.badge-type{display:inline-block;margin-top:10px;padding:5px 16px;background:rgba(0,0,0,.12);border-radius:20px;font-size:10px;font-weight:800;letter-spacing:2px;color:#000}
+.photo-wrap{display:flex;justify-content:center;margin-top:-42px}
+.photo{width:96px;height:96px;border-radius:50%;border:4px solid #FFD700;object-fit:cover;background:#1a1a1a;display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:900;color:#FFD700}
+.mid{flex:1;padding:20px 26px;text-align:center}
+.name{font-size:21px;font-weight:800;color:#fff;margin-bottom:4px}
+.fname{font-size:11px;color:#888;margin-bottom:16px}
+.info{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+.box{background:rgba(255,255,255,.04);border:1px solid rgba(255,215,0,.08);border-radius:10px;padding:10px}
+.box .l{font-size:8px;text-transform:uppercase;letter-spacing:1px;color:#666;font-weight:700;margin-bottom:3px}
+.box .v{font-size:12px;font-weight:700;color:#E5E7EB}
+.bottom{background:rgba(255,215,0,.04);padding:14px 24px;display:flex;align-items:center;justify-content:space-between;border-top:1px solid rgba(255,215,0,.08)}
+.valid{font-size:9px;color:#666;font-weight:700}
+.valid .d{color:#FFD700;font-size:11px}
+.sid-code{font-size:10px;font-weight:800;color:#FFD700;letter-spacing:1px}
+@media print{body{background:#fff;padding:10px;gap:12px}.card{box-shadow:none;page-break-inside:avoid}}
+</style></head><body>
+<div class="card">
+<div class="top">
+<div class="logo">AEM<span style="color:#fff">T</span>ECH</div>
+<div class="inst">INSTITUTE OF DIGITAL SKILLS</div>
+<div class="badge-type">STUDENT ID CARD</div>
+</div>
+<div class="photo-wrap">${s.profile_image ? `<img class="photo" src="${s.profile_image}" alt=""/>` : `<div class="photo">${initials(s.full_name)}</div>`}</div>
+<div class="mid">
+<div class="name">${s.full_name}</div>
+${s.father_name ? `<div class="fname">${childOf(s.gender)} ${s.father_name}</div>` : '<div class="fname">&nbsp;</div>'}
+<div class="info">
+<div class="box"><div class="l">Student ID</div><div class="v">${sid}</div></div>
+<div class="box"><div class="l">Batch</div><div class="v">${batch?.name || '—'}</div></div>
+<div class="box"><div class="l">City</div><div class="v">${s.city || '—'}</div></div>
+<div class="box"><div class="l">Status</div><div class="v" style="color:${s.status === 'active' ? '#10B981' : '#F59E0B'}">${(s.status || 'active').toUpperCase()}</div></div>
+</div>
+${qrHtml}
+</div>
+<div class="bottom">
+<div class="valid">VALID TILL<div class="d">${new Date(Date.now() + 31536000000).toLocaleDateString('en-PK', { month: 'short', year: 'numeric' })}</div></div>
+<div class="sid-code">${sid}</div>
+</div>
+</div>
+<script>window.onload=()=>{setTimeout(()=>window.print(),600)}<\/script>
+</body></html>`)
+    w.document.close()
+  }
+
+  const genAll = () => {
+    const list = students.filter(s => !search || s.full_name?.toLowerCase().includes(search.toLowerCase()))
+    if (list.length === 0) { toast.error('No students'); return }
+    toast.loading('Generating...', { id: 'cards' })
+    setTimeout(() => {
+      list.slice(0, 12).forEach((s, i) => setTimeout(() => genCard(s), i * 400))
+      toast.success(`${Math.min(list.length, 12)} cards opening!`, { id: 'cards' })
+    }, 300)
+  }
+
+  if (loading) return <SkeletonDashboard />
+  const filtered = students.filter(s => !search || s.full_name?.toLowerCase().includes(search.toLowerCase()))
+
+  return (
+    <Card title="🪪 Student ID Cards" icon="🪪" action={
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <Search value={search} onChange={e => setSearch(e.target.value)} />
+        <Btn type="outline" size="sm" onClick={genAll} icon="🖨">Print All (12)</Btn>
+      </div>
+    }>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(180px,1fr))', gap: 16 }}>
+        {filtered.map(s => (
+          <div key={s.id} className="ch" style={{ ...getGlassLight(dark), borderRadius: 18, padding: 22, textAlign: 'center' }}>
+            <Av name={s.full_name} src={s.profile_image || null} size={58} glow />
+            <div style={{ fontSize: 14, fontWeight: 800, marginTop: 14, color: dark ? '#E5E7EB' : '#1F2937' }}>{s.full_name}</div>
+            <div style={{ fontSize: 11, color: '#6B7280', margin: '4px 0 10px' }}>{batches.find(b => b.id === s.batch_id)?.name || '—'}</div>
+            <div style={{ fontSize: 9, color: '#4B5563', fontFamily: "'Space Grotesk',sans-serif", marginBottom: 12 }}>AEM-{String(s.full_name || '').replace(/\s+/g, '').substring(0, 3).toUpperCase()}-{(s.id || '').substring(0, 6).toUpperCase()}</div>
+            <Bdg type={statusBadge(s.status)} size="sm" dot>{s.status}</Bdg>
+            <div style={{ marginTop: 14 }}><Btn onClick={() => genCard(s)} size="sm" full icon="🪪">Generate</Btn></div>
+          </div>
+        ))}
+        {filtered.length === 0 && <Empty icon="🪪" title="No students found" />}
+      </div>
+    </Card>
+  )
+}
+
+// ═══════════════════════════════════════
+// WHATSAPP REMINDERS HUB
+// ═══════════════════════════════════════
+function RemindersPage() {
+  const { dark } = useTheme()
+  const [students, setStudents] = useState([]); const [classes, setClasses] = useState([]); const [assignments, setAssignments] = useState([])
+  const [batches, setBatches] = useState([]); const [loading, setLoading] = useState(true)
+  const [tab, setTab] = useState('fee'); const [selBatch, setSelBatch] = useState('')
+  const [sent, setSent] = useState([]); const [msg, setMsg] = useState('')
+
+  const TPL = {
+    fee: 'Assalam o Alaikum {name}! 🙏\n\nAapki fee ka bakaya:\n💰 Total Fee: {fee}\n✅ Jama: {paid}\n⚠️ Bakaya: {due}\n\nBarah-e-karam jald az jald jama karayen.\n\nShukria!\nAEMTECH Institute',
+    class: 'Assalam o Alaikum {name}! 👋\n\nAaj class hai:\n📚 Topic: {topic}\n⏰ Time: {time}\n📅 Date: {date}\n\nClass time par zaroor join karein!\n\nAEMTECH Institute',
+    assignment: 'Assalam o Alaikum {name}! 📝\n\nAssignment ki deadline aa gayi hai:\n📋 {assignment}\n📅 Due: {due}\n⏳ Time bacha hai!\n\nJald submit karein.\n\nAEMTECH Institute',
+    absent: 'Assalam o Alaikum {name}! 🚨\n\nHumne note kiya ke aap {absent} classes se gayab hain.\n\nAgar koi masla ho to humein zaroor batayein. Aapki attendance {pct}% hai.\n\nAEMTECH Institute',
+    welcome: 'Assalam o Alaikum {name}! 🎉\n\nAEMTECH mein khair maqdam!\n\n📧 Login: {email}\n🔑 Password: {password}\n\nAEMTECH Institute',
+  }
+
+  useEffect(() => {
+    (async () => {
+      const [s, c, a, b] = await Promise.all([
+        sb.from('students').select('*').order('full_name'),
+        sb.from('classes').select('*').order('class_number'),
+        sb.from('assignments').select('*'),
+        sb.from('batches').select('*'),
+      ])
+      setStudents(s.data || []); setClasses(c.data || []); setAssignments(a.data || []); setBatches(b.data || [])
+      setLoading(false)
+    })()
+  }, [])
+
+  useEffect(() => { setMsg(TPL[tab] || '') }, [tab])
+
+  const fmtPhone = (num) => { let ph = (num || '').replace(/\D/g, ''); if (!ph) return ''; if (ph.startsWith('0')) ph = '92' + ph.substring(1); if (ph.length === 10 && !ph.startsWith('92')) ph = '92' + ph; return ph }
+
+  const today = new Date().toISOString().split('T')[0]
+  const todayClasses = classes.filter(c => c.date === today)
+
+  let targets = []
+  if (tab === 'fee') targets = students.filter(s => s.status === 'active' && (s.fee_amount || 0) - (s.fee_paid || 0) > 0)
+    .map(s => ({ ...s, vars: { fee: currency(s.fee_amount), paid: currency(s.fee_paid), due: currency((s.fee_amount || 0) - (s.fee_paid || 0)) } }))
+  else if (tab === 'class') {
+    const tc = selBatch ? todayClasses.filter(c => c.batch_id === selBatch) : todayClasses
+    const bIds = [...new Set(tc.map(c => c.batch_id))]
+    targets = students.filter(s => s.status === 'active' && bIds.includes(s.batch_id))
+      .map(s => { const c = tc.find(x => x.batch_id === s.batch_id) || tc[0]; return { ...s, vars: { topic: c?.title || 'Class', time: c?.time || '7 PM', date: fmtDate(c?.date || today) } } })
+  } else if (tab === 'assignment') {
+    const asns = selBatch ? assignments.filter(a => a.batch_id === selBatch) : assignments
+    const bIds = [...new Set(asns.map(a => a.batch_id))]
+    targets = students.filter(s => s.status === 'active' && bIds.includes(s.batch_id))
+      .map(s => { const a = asns.find(x => x.batch_id === s.batch_id) || asns[0]; return { ...s, vars: { assignment: a?.title || 'Assignment', due: fmtDT(a?.due_date) } } })
+  } else if (tab === 'absent') {
+    targets = students.filter(s => s.status === 'active').map(s => {
+      const total = classes.filter(c => c.batch_id === s.batch_id).length
+      const present = classes.filter(c => c.batch_id === s.batch_id).length > 0 ? 0 : 0
+      return { ...s, total, vars: {} }
+    })
+    // compute attendance properly
+    targets = targets.map(t => t)
+  } else if (tab === 'welcome') targets = students.filter(s => s.status === 'active').map(s => ({ ...s, vars: { email: s.login_email || s.email, password: s.password || '12345678' } }))
+
+  if (tab === 'absent') targets = []
+
+  const sendOne = (s) => {
+    let text = msg
+    Object.entries(s.vars || {}).forEach(([k, v]) => { text = text.split('{' + k + '}').join(String(v)) })
+    text = text.split('{name}').join(s.full_name || '')
+    const ph = fmtPhone(s.phone)
+    if (!ph) { toast.error(s.full_name + ' ka phone nahi hai'); return false }
+    window.open('https://api.whatsapp.com/send?phone=' + ph + '&text=' + encodeURIComponent(text), '_blank')
+    setSent(p => [...p, s.id])
+    return true
+  }
+
+  const sendAll = () => {
+    if (targets.length === 0) { toast.error('No targets'); return }
+    const list = targets.slice(0, 15)
+    let ok = 0
+    list.forEach((s, i) => setTimeout(() => { if (sendOne(s)) ok++ }, i * 700))
+    logAction('BULK_WHATSAPP', 'Reminders', `${tab} → ${list.length} students`)
+    toast.success(`${list.length} WhatsApp tabs khul rahe hain! 📣`)
+  }
+
+  const copyList = () => {
+    const lines = targets.map(s => `${s.full_name} — ${fmtPhone(s.phone)}`).join('\n')
+    navigator.clipboard?.writeText(lines); toast.success('Phone list copied! 📋')
+  }
+
+  if (loading) return <SkeletonDashboard />
+
+  const tabs = [['fee', '💰 Fee Due'], ['class', '📅 Class Today'], ['assignment', '📝 Assignment'], ['welcome', '🎉 Welcome']]
+
+  return (
+    <div className="page-enter">
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20, padding: 6, ...getGlass(dark), borderRadius: 16, overflowX: 'auto' }} className="cs">
+        {tabs.map(([k, l]) => (
+          <button key={k} onClick={() => setTab(k)} style={{ padding: '12px 22px', borderRadius: 12, border: 'none', cursor: 'pointer', fontFamily: "'Inter',sans-serif", fontWeight: 700, fontSize: 12, transition: 'all .3s', background: tab === k ? G : 'transparent', color: tab === k ? '#000' : '#6B7280', whiteSpace: 'nowrap' }}>{l}</button>
+        ))}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 16, marginBottom: 22 }}>
+        <Stat icon="🎯" value={targets.length} label="Targets" />
+        <Stat icon="📱" value={targets.filter(s => s.phone).length} label="With Phone" color="#10B981" />
+        <Stat icon="✅" value={sent.length} label="Sent" color="#3B82F6" />
+        <Stat icon="⚠️" value={targets.filter(s => !s.phone).length} label="No Phone" color="#EF4444" />
+      </div>
+
+      <Grid gap={22}>
+        <Card title="✏️ Message Template" icon="✏️">
+          <div style={{ fontSize: 11, color: '#6B7280', marginBottom: 12, lineHeight: 1.6 }}>
+            Variables: <strong style={{ color: '#FFD700' }}>{'{name}'}</strong>
+            {tab === 'fee' && <>, {'{fee}'}, {'{paid}'}, {'{due}'}</>}
+            {tab === 'class' && <>, {'{topic}'}, {'{time}'}, {'{date}'}</>}
+            {tab === 'assignment' && <>, {'{assignment}'}, {'{due}'}</>}
+            {tab === 'welcome' && <>, {'{email}'}, {'{password}'}</>}
+          </div>
+          <textarea value={msg} onChange={e => setMsg(e.target.value)} rows={10}
+            style={{ width: '100%', background: dark ? 'rgba(0,0,0,.3)' : '#FAFAFA', border: `1.5px solid ${dark ? 'rgba(255,255,255,.06)' : 'rgba(0,0,0,.1)'}`, color: dark ? '#E5E7EB' : '#1F2937', padding: '14px 18px', borderRadius: 13, fontSize: 13, outline: 'none', fontFamily: "'Inter',sans-serif", resize: 'vertical', lineHeight: 1.7 }}/>
+          <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
+            <Btn onClick={sendAll} icon="📣" disabled={targets.length === 0}>Send to {Math.min(targets.length, 15)}</Btn>
+            <Btn type="outline" size="sm" onClick={() => setMsg(TPL[tab])} icon="🔄">Reset</Btn>
+            <Btn type="ghost" size="sm" onClick={copyList} icon="📋">Copy Phones</Btn>
+          </div>
+          <div style={{ fontSize: 10, color: '#4B5563', marginTop: 10 }}>⚠️ Browser ek saath ek se zyada tabs block kar sakta hai — "Allow pop-ups" karein. Pehle 15 students tak send hota hai.</div>
+        </Card>
+
+        <Card title={`🎯 Recipients (${targets.length})`} icon="🎯">
+          <div style={{ maxHeight: 460, overflowY: 'auto' }} className="cs">
+            {targets.length === 0 ? <Empty icon="✅" title="No targets" sub="Sab theek hai!" /> : targets.map(s => (
+              <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 12, ...getGlassLight(dark), borderRadius: 12, padding: '12px 14px', marginBottom: 10 }}>
+                <Av name={s.full_name} src={s.profile_image || null} size={34} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: dark ? '#E5E7EB' : '#1F2937', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.full_name}</div>
+                  <div style={{ fontSize: 11, color: '#6B7280' }}>{s.phone || '⚠️ No phone'} {tab === 'fee' && s.vars?.due ? `· Due ${s.vars.due}` : ''}</div>
+                </div>
+                <Btn type={sent.includes(s.id) ? 'success' : 'outline'} size="xs" onClick={() => sendOne(s)} icon={sent.includes(s.id) ? '✅' : '💬'}>{sent.includes(s.id) ? 'Sent' : 'Send'}</Btn>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </Grid>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════
+// MONTHLY INSTITUTE REPORT PDF
+// ═══════════════════════════════════════
+function MonthlyReportPage() {
+  const { dark } = useTheme()
+  const [loading, setLoading] = useState(true); const [data, setData] = useState(null)
+  const [month, setMonth] = useState(MONTHS[new Date().getMonth()]); const [year, setYear] = useState(new Date().getFullYear())
+
+  useEffect(() => {
+    (async () => {
+      const [s, c, a, att, sub, adm, pay, b] = await Promise.all([
+        sb.from('students').select('*'), sb.from('classes').select('*'), sb.from('assignments').select('*'),
+        sb.from('attendance').select('*'), sb.from('submissions').select('*'), sb.from('admissions').select('*'),
+        sb.from('fee_payments').select('*'), sb.from('batches').select('*'),
+      ])
+      setData({ students: s.data || [], classes: c.data || [], assignments: a.data || [], attendance: att.data || [], submissions: sub.data || [], admissions: adm.data || [], payments: pay.data || [], batches: b.data || [] })
+      setLoading(false)
+    })()
+  }, [])
+
+  if (loading) return <SkeletonDashboard />
+  if (!data) return null
+
+  const inMonth = (d) => { if (!d) return false; const dt = new Date(d); return MONTHS[dt.getMonth()] === month && dt.getFullYear() === Number(year) }
+  const mStudents = data.students.filter(s => inMonth(s.created_at))
+  const mClasses = data.classes.filter(c => inMonth(c.date))
+  const mAdmissions = data.admissions.filter(a => inMonth(a.applied_at))
+  const mPayments = data.payments.filter(p => inMonth(p.paid_date || p.created_at))
+  const collected = mPayments.reduce((a, p) => a + (p.paid_amount || p.amount || 0), 0)
+  const mSubs = data.submissions.filter(s => inMonth(s.submitted_at))
+  const mAtt = data.attendance.filter(a => inMonth(a.marked_at || a.created_at))
+  const presentRate = mAtt.length > 0 ? Math.round(mAtt.filter(a => a.status === 'present').length / mAtt.length * 100) : 0
+  const dueStudents = data.students.filter(s => s.status === 'active' && (s.fee_amount || 0) - (s.fee_paid || 0) > 0)
+  const totalDue = dueStudents.reduce((a, s) => a + ((s.fee_amount || 0) - (s.fee_paid || 0)), 0)
+
+  // Top performers
+  const ranked = data.students.filter(s => s.status === 'active').map(s => {
+    const total = data.classes.filter(c => c.batch_id === s.batch_id).length
+    const present = data.attendance.filter(a => a.student_id === s.id && a.status === 'present').length
+    const subs = data.submissions.filter(x => x.student_id === s.id && x.marks_obtained != null)
+    const avg = subs.length > 0 ? Math.round(subs.reduce((a, x) => a + x.marks_obtained, 0) / subs.length) : 0
+    const pct = total > 0 ? Math.round(present / total * 100) : 0
+    return { ...s, pct, avg, score: pct + avg }
+  }).sort((a, b) => b.score - a.score).slice(0, 10)
+
+  const batchPerf = data.batches.map(b => {
+    const bs = data.students.filter(s => s.batch_id === b.id)
+    const bc = data.classes.filter(c => c.batch_id === b.id)
+    const ba = data.attendance.filter(a => bc.some(c => c.id === a.class_id))
+    return { name: b.name, students: bs.length, classes: bc.length, attPct: ba.length > 0 ? Math.round(ba.filter(a => a.status === 'present').length / ba.length * 100) : 0, revenue: bs.reduce((a, s) => a + (s.fee_paid || 0), 0) }
+  })
+
+  const generate = () => {
+    const w = window.open('', '_blank')
+    w.document.write(`<!DOCTYPE html><html><head><title>Monthly Report — ${month} ${year}</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',sans-serif;background:#f0f0f0;padding:30px;display:flex;justify-content:center}
+.rep{width:800px;background:#fff;box-shadow:0 4px 30px rgba(0,0,0,.1)}
+.hd{background:linear-gradient(135deg,#0a0a0a,#1a1a1a);padding:36px 44px;border-bottom:4px solid #FFD700;color:#fff;display:flex;justify-content:space-between;align-items:center}
+.hd h1{font-size:26px;font-weight:900}
+.hd .sub{font-size:11px;letter-spacing:3px;color:rgba(255,255,255,.5);font-weight:700;margin-bottom:6px}
+.hd .per{font-size:34px;font-weight:900;color:#FFD700;font-family:'Inter',sans-serif}
+.bd{padding:36px 44px}
+.kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:30px}
+.kpi div{background:#f9fafb;border-left:3px solid #FFD700;border-radius:10px;padding:16px}
+.kpi .l{font-size:9px;text-transform:uppercase;letter-spacing:1px;color:#888;font-weight:700;margin-bottom:5px}
+.kpi .v{font-size:22px;font-weight:900;color:#111}
+.sec{margin-bottom:26px}
+.sec h2{font-size:14px;font-weight:800;color:#111;margin-bottom:14px;padding-bottom:8px;border-bottom:2px solid #f3f4f6}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{background:#f9fafb;padding:10px 12px;text-align:left;font-weight:700;color:#4b5563;border-bottom:2px solid #e5e7eb;font-size:10px;text-transform:uppercase;letter-spacing:.5px}
+td{padding:9px 12px;border-bottom:1px solid #f3f4f6;color:#374151}
+.ft{padding:22px 44px;border-top:2px solid #f3f4f6;background:#fafafa;text-align:center}
+.ft p{font-size:10px;color:#999}
+@media print{body{background:#fff;padding:0}.rep{box-shadow:none}}
+</style></head><body>
+<div class="rep">
+<div class="hd">
+<div><div class="sub">AEMTECH INSTITUTE</div><h1>Monthly Report</h1><div style="font-size:11px;color:#888;margin-top:4px">Generated ${new Date().toLocaleString('en-PK')}</div></div>
+<div style="text-align:right"><div class="per">${month.substring(0,3)}</div><div style="font-size:20px;font-weight:800;color:#fff">${year}</div></div>
+</div>
+<div class="bd">
+<div class="kpi">
+<div><div class="l">New Students</div><div class="v">${mStudents.length}</div></div>
+<div><div class="l">Applications</div><div class="v">${mAdmissions.length}</div></div>
+<div><div class="l">Classes Held</div><div class="v">${mClasses.length}</div></div>
+<div><div class="l">Attendance</div><div class="v" style="color:${presentRate>=80?'#059669':presentRate>=60?'#d97706':'#dc2626'}">${presentRate}%</div></div>
+<div><div class="l">Collected</div><div class="v" style="color:#059669">PKR ${collected.toLocaleString()}</div></div>
+<div><div class="l">Outstanding</div><div class="v" style="color:#dc2626">PKR ${totalDue.toLocaleString()}</div></div>
+<div><div class="l">Submissions</div><div class="v">${mSubs.length}</div></div>
+<div><div class="l">Total Students</div><div class="v">${data.students.length}</div></div>
+</div>
+
+<div class="sec"><h2>🏫 Batch Performance</h2><table>
+<tr><th>Batch</th><th>Students</th><th>Classes</th><th>Attendance</th><th>Revenue</th></tr>
+${batchPerf.map(b => `<tr><td style="font-weight:700">${b.name}</td><td>${b.students}</td><td>${b.classes}</td><td style="color:${b.attPct>=80?'#059669':b.attPct>=60?'#d97706':'#dc2626'};font-weight:700">${b.attPct}%</td><td>PKR ${b.revenue.toLocaleString()}</td></tr>`).join('')}
+</table></div>
+
+<div class="sec"><h2>🏆 Top 10 Performers</h2><table>
+<tr><th>#</th><th>Student</th><th>Attendance</th><th>Avg Marks</th><th>Score</th></tr>
+${ranked.map((s,i) => `<tr><td style="font-weight:800;color:${i<3?'#d97706':'#666'}">${i<3?['🥇','🥈','🥉'][i]:i+1}</td><td style="font-weight:700">${s.full_name}</td><td style="color:${s.pct>=80?'#059669':'#dc2626'}">${s.pct}%</td><td>${s.avg}</td><td style="font-weight:800;color:#d97706">${s.score}</td></tr>`).join('')}
+</table></div>
+
+<div class="sec"><h2>⚠️ Fee Defaulters (${dueStudents.length})</h2><table>
+<tr><th>Student</th><th>Batch</th><th>Fee</th><th>Paid</th><th>Due</th></tr>
+${dueStudents.slice(0,25).map(s => `<tr><td style="font-weight:700">${s.full_name}</td><td>${data.batches.find(b=>b.id===s.batch_id)?.name||'—'}</td><td>PKR ${(s.fee_amount||0).toLocaleString()}</td><td>PKR ${(s.fee_paid||0).toLocaleString()}</td><td style="color:#dc2626;font-weight:700">PKR ${((s.fee_amount||0)-(s.fee_paid||0)).toLocaleString()}</td></tr>`).join('')}
+</table></div>
+</div>
+<div class="ft"><p style="font-size:12px;color:#666;font-weight:600;margin-bottom:6px">AEMTECH Institute — Design the Future</p><p>Computer generated monthly report • ${month} ${year}</p></div>
+</div>
+<script>window.onload=()=>{setTimeout(()=>window.print(),600)}<\/script>
+</body></html>`)
+    w.document.close()
+    logAction('GENERATE', 'MonthlyReport', `${month} ${year}`)
+  }
+
+  const exportX = () => exportXLS(batchPerf.map(b => ({ Batch: b.name, Students: b.students, Classes: b.classes, 'Attendance %': b.attPct, 'Revenue (PKR)': b.revenue })), `AEMTECH_Report_${month}_${year}.xlsx`, 'Batches')
+
+  return (
+    <div className="page-enter">
+      <div style={{ ...getGlass(dark), borderRadius: 22, padding: 'clamp(22px,3vw,34px)', marginBottom: 24, background: dark ? 'linear-gradient(135deg,rgba(255,215,0,.06),rgba(12,12,14,.85))' : 'linear-gradient(135deg,rgba(255,215,0,.08),rgba(255,255,255,.95))' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 18 }}>
+          <div>
+            <div style={{ fontSize: 11, color: '#6B7280', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 6 }}>Institute Report</div>
+            <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 'clamp(22px,3vw,30px)', fontWeight: 900 }}><span style={{ background: G, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{month} {year}</span></div>
+          </div>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <Btn onClick={generate} icon="📑" size="lg">Generate PDF</Btn>
+            <Btn type="outline" size="lg" onClick={exportX} icon="📊">Excel</Btn>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 10, marginBottom: 22, flexWrap: 'wrap' }}>
+        <Sel label="" value={month} onChange={e => setMonth(e.target.value)} style={{ minWidth: 170 }}>
+          {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
+        </Sel>
+        <Sel label="" value={year} onChange={e => setYear(e.target.value)} style={{ minWidth: 120 }}>
+          {[0, 1, 2].map(i => { const y = new Date().getFullYear() - i; return <option key={y} value={y}>{y}</option> }) }
+        </Sel>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 16, marginBottom: 24 }}>
+        <Stat icon="👥" value={mStudents.length} label="New Students" color="#10B981" />
+        <Stat icon="📋" value={mAdmissions.length} label="Applications" />
+        <Stat icon="📅" value={mClasses.length} label="Classes Held" color="#3B82F6" />
+        <Stat icon="✅" value={presentRate + '%'} label="Attendance" color={attColor(presentRate)} />
+        <Stat icon="💰" value={currency(collected)} label="Collected" color="#10B981" />
+        <Stat icon="⚠️" value={currency(totalDue)} label="Outstanding" color="#EF4444" />
+        <Stat icon="📤" value={mSubs.length} label="Submissions" color="#8B5CF6" />
+        <Stat icon="🏫" value={data.students.length} label="Total Students" />
+      </div>
+
+      <Card title="🏫 Batch Performance" icon="🏫" noPadding>
+        <Tbl headers={['Batch', 'Students', 'Classes', 'Attendance', 'Revenue']}>
+          {batchPerf.map((b, i) => (
+            <TR key={b.name} delay={i * .04}>
+              <TD style={{ fontWeight: 700, color: dark ? '#E5E7EB' : '#1F2937' }}>{b.name}</TD>
+              <TD>{b.students}</TD><TD>{b.classes}</TD>
+              <TD><div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><div style={{ width: 85 }}><PBar value={b.attPct} max={100} /></div><span style={{ fontWeight: 700, color: attColor(b.attPct) }}>{b.attPct}%</span></div></TD>
+              <TD style={{ fontWeight: 700, color: '#10B981' }}>{currency(b.revenue)}</TD>
+            </TR>
+          ))}
+        </Tbl>
+      </Card>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════
+// BATCH PROMOTION
+// ═══════════════════════════════════════
+function PromotionPage() {
+  const { dark } = useTheme()
+  const [batches, setBatches] = useState([]); const [students, setStudents] = useState([]); const [classes, setClasses] = useState([])
+  const [loading, setLoading] = useState(true); const [from, setFrom] = useState(''); const [to, setTo] = useState('')
+  const [busy, setBusy] = useState(false); const { confirm } = useConfirm()
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    const [b, s, c] = await Promise.all([sb.from('batches').select('*').order('created_at'), sb.from('students').select('*'), sb.from('classes').select('*')])
+    setBatches(b.data || []); setStudents(s.data || []); setClasses(c.data || []); setLoading(false)
+  }, [])
+  useEffect(() => { load() }, [load])
+
+  const moving = from ? students.filter(s => s.batch_id === from && s.status === 'active') : []
+  const fromBatch = batches.find(b => b.id === from)
+  const toBatch = batches.find(b => b.id === to)
+  const fromClasses = classes.filter(c => c.batch_id === from).length
+
+  const promote = async () => {
+    if (!from || !to) { toast.error('Select both batches'); return }
+    if (from === to) { toast.error('Same batch selected'); return }
+    const ok = await confirm({
+      title: `Promote ${moving.length} Students?`,
+      message: `"${fromBatch?.name}" se "${toBatch?.name}" mein transfer honge. Attendance aur submissions safe rahenge.`,
+      type: 'warning', confirmText: `Promote ${moving.length}`, icon: '⏭'
+    })
+    if (!ok) return
+    setBusy(true)
+    let done = 0
+    for (const s of moving) { await sb.from('students').update({ batch_id: to }).eq('id', s.id); done++ }
+    logAction('PROMOTE', 'Batch', `${fromBatch?.name} → ${toBatch?.name} (${done} students)`)
+    toastSuccess(`${done} students promoted! 🎉`, { undo: async () => { for (const s of moving) await sb.from('students').update({ batch_id: from }).eq('id', s.id); load() }, duration: 6000 })
+    setBusy(false); load()
+  }
+
+  const graduate = async () => {
+    if (!from) { toast.error('Select batch'); return }
+    const ok = await confirm({ title: `Graduate ${moving.length} Students?`, message: 'Sab students GRADUATED status mil jayega.', type: 'warning', confirmText: 'Graduate All', icon: '🎓' })
+    if (!ok) return
+    setBusy(true)
+    for (const s of moving) await sb.from('students').update({ status: 'graduated' }).eq('id', s.id)
+    logAction('GRADUATE', 'Batch', `${fromBatch?.name} (${moving.length} students)`)
+    toast.success(`${moving.length} students graduated 🎓`)
+    setBusy(false); load()
+  }
+
+  if (loading) return <SkeletonDashboard />
+
+  return (
+    <div className="page-enter">
+      <Grid gap={22}>
+        <Card title="⏭ Promote Students" icon="⏭">
+          <Grid>
+            <Sel label="From Batch" value={from} onChange={e => setFrom(e.target.value)}>
+              <option value="">Select</option>
+              {batches.map(b => <option key={b.id} value={b.id}>{b.name} ({students.filter(s => s.batch_id === b.id).length})</option>)}
+            </Sel>
+            <Sel label="To Batch" value={to} onChange={e => setTo(e.target.value)}>
+              <option value="">Select</option>
+              {batches.filter(b => b.id !== from).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </Sel>
+          </Grid>
+          {from && (
+            <div style={{ ...getGlassLight(dark), borderRadius: 14, padding: 18, marginTop: 6 }}>
+              <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginBottom: 16 }}>
+                {[['👥', moving.length, 'Active Students'], ['📅', fromClasses, 'Classes Done'], ['🎓', students.filter(s => s.batch_id === from && s.status === 'graduated').length, 'Graduated']].map(([ic, n, l]) => (
+                  <div key={l} style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 20 }}>{ic}</div>
+                    <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 22, fontWeight: 900, color: '#FFD700' }}>{n}</div>
+                    <div style={{ fontSize: 10, color: '#6B7280', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700 }}>{l}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <Btn onClick={promote} loading={busy} icon="⏭" disabled={!to || moving.length === 0}>Promote to {toBatch?.name || '...'}</Btn>
+                <Btn type="warning" onClick={graduate} loading={busy} icon="🎓">Graduate All</Btn>
+              </div>
+            </div>
+          )}
+        </Card>
+
+        <Card title={`👥 Students (${moving.length})`} icon="👥">
+          {moving.length === 0 ? <Empty icon="👥" title="No active students" sub="Batch select karein" /> : (
+            <div style={{ maxHeight: 420, overflowY: 'auto' }} className="cs">
+              {moving.map(s => (
+                <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 12, ...getGlassLight(dark), borderRadius: 12, padding: '11px 14px', marginBottom: 9 }}>
+                  <Av name={s.full_name} src={s.profile_image || null} size={32} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: dark ? '#E5E7EB' : '#1F2937' }}>{s.full_name}</div>
+                    <div style={{ fontSize: 11, color: '#6B7280' }}>{childOf(s.gender)} {s.father_name || '—'}</div>
+                  </div>
+                  <Bdg type={statusBadge(s.fee_status)} size="sm" dot>{s.fee_status}</Bdg>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      </Grid>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════
+// AUDIT LOG
+// ═══════════════════════════════════════
+function AuditLogPage() {
+  const { dark } = useTheme()
+  const [logs, setLogs] = useState([]); const [search, setSearch] = useState(''); const [filter, setFilter] = useState('all')
+  const { confirm } = useConfirm()
+
+  useEffect(() => { setLogs(getAuditLogs()) }, [])
+
+  const actions = [...new Set(logs.map(l => l.action))]
+  const filtered = logs.filter(l => (!filter || filter === 'all' || l.action === filter) && (!search || (l.entity + ' ' + l.detail + ' ' + l.actor).toLowerCase().includes(search.toLowerCase())))
+
+  const clear = async () => {
+    const ok = await confirm({ title: 'Clear Audit Log?', message: `${logs.length} entries delete ho jayengi.`, type: 'danger', confirmText: 'Clear All', icon: '🗑️' })
+    if (!ok) return
+    localStorage.removeItem(AUDIT_KEY); setLogs([]); toast.success('Audit log cleared')
+  }
+
+  const exportX = () => exportXLS(logs.map(l => ({ Time: fmtDT(l.time), Actor: l.actor, Action: l.action, Entity: l.entity, Detail: l.detail, Meta: l.meta })), 'AEMTECH_AuditLog.xlsx', 'Audit')
+
+  const colorFor = (a) => a?.includes('DELETE') ? '#EF4444' : a?.includes('PROMOTE') || a?.includes('GRADUATE') ? '#10B981' : a?.includes('BULK') ? '#8B5CF6' : a?.includes('GENERATE') ? '#3B82F6' : '#FFD700'
+
+  return (
+    <div className="page-enter">
+      <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
+        <Search value={search} onChange={e => setSearch(e.target.value)} />
+        <select value={filter} onChange={e => setFilter(e.target.value)} style={{ background: dark ? '#0A0A0B' : '#fff', border: `1px solid ${dark ? 'rgba(255,255,255,.06)' : 'rgba(0,0,0,.1)'}`, color: dark ? '#E5E7EB' : '#1F2937', padding: '10px 14px', borderRadius: 11, fontSize: 12, fontFamily: "'Inter',sans-serif", outline: 'none' }}>
+          <option value="all">All Actions</option>
+          {actions.map(a => <option key={a} value={a}>{a}</option>)}
+        </select>
+        <Btn type="success" size="sm" onClick={exportX} icon="📊">Export</Btn>
+        {logs.length > 0 && <Btn type="danger" size="sm" onClick={clear} icon="🗑">Clear</Btn>}
+      </div>
+
+      <Card title={`🕵️ Audit Trail (${filtered.length})`} icon="🕵️" noPadding>
+        <Tbl headers={['Time', 'Actor', 'Action', 'Entity', 'Details']} empty={filtered.length === 0 ? <Empty icon="🕵️" title="No entries yet" sub="Bulk actions, promotions aur report generation yahan track hongi" /> : null}>
+          {filtered.map((l, i) => (
+            <TR key={l.id} delay={i * .02}>
+              <TD style={{ fontSize: 11 }}>{fmtDT(l.time)}</TD>
+              <TD><Bdg type="gold" size="sm">{l.actor}</Bdg></TD>
+              <TD><span style={{ fontSize: 10, fontWeight: 800, color: colorFor(l.action), background: colorFor(l.action) + '15', padding: '4px 10px', borderRadius: 7, letterSpacing: .5 }}>{l.action}</span></TD>
+              <TD style={{ fontSize: 12, fontWeight: 600, color: dark ? '#E5E7EB' : '#1F2937' }}>{l.entity}</TD>
+              <TD style={{ fontSize: 12, maxWidth: 320, whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.4 }}>{l.detail}{l.meta ? ` · ${l.meta}` : ''}</TD>
+            </TR>
+          ))}
+        </Tbl>
+      </Card>
+    </div>
+  )
+}
+
+const pageTitles = { dashboard: '📊 Dashboard', students: '👥 Students', admissions: '📋 Admissions', batches: '🏫 Batches', classes: '📅 Classes', attendance: '✅ Attendance', assignments: '📝 Assignments', submissions: '📤 Submissions', recordings: '🎥 Recordings', fees: '💰 Fee Management', announcements: '📢 Announcements', certificates: '🎓 Certificates', leaderboard: '🏆 Leaderboard', sync: '🔄 Sheet Sync', excel: '📈 Import/Export', settings: '⚙️ Settings', certificate: '🎓 My Certificate', profile: '👤 My Profile', timetable: '🗓 Timetable', quizzes: '🧠 Quizzes', analytics: '📈 Analytics', progress: '📄 Progress Report', tasks: '🎯 Task Center', alerts: '🚨 Attendance Alerts', ledger: '📒 Fee Ledger', idcards: '🪪 ID Cards', reminders: '📣 WhatsApp Reminders', report: '📑 Monthly Report', promotion: '⏭ Batch Promotion', audit: '🕵️ Audit Log' }
 
 function Portal() {
   const { isLoggedIn, isAdmin, isStudent, user } = useAuth()
@@ -4063,7 +5254,7 @@ function Portal() {
     return () => { sb.removeChannel(channel) }
   }, [isLoggedIn])
 
-  const adminPages = { dashboard: <AdminDashboard />, students: <StudentsPage />, admissions: <AdmissionsPage />, batches: <BatchesPage />, classes: <ClassesPage />, attendance: <AttendancePage />, assignments: <AssignmentsPage />, submissions: <SubmissionsPage />, recordings: <RecordingsPage />, fees: <FeesPage />, announcements: <AnnouncementsPage />, certificates: <CertificatesPage />, leaderboard: <LeaderboardPage />, sync: <SheetSyncPage />, excel: <ExcelPage />, settings: <SettingsPage />, timetable: <TimetablePage />, quizzes: <QuizAdminPage />, analytics: <AnalyticsPage />, progress: <ProgressReportPage /> }
+  const adminPages = { dashboard: <AdminDashboard />, tasks: <TaskCenterPage />, students: <StudentsPage />, admissions: <AdmissionsPage />, batches: <BatchesPage />, classes: <ClassesPage />, attendance: <AttendancePage />, alerts: <AttendanceAlertsPage />, assignments: <AssignmentsPage />, submissions: <SubmissionsPage />, recordings: <RecordingsPage />, fees: <FeesPage />, ledger: <FeeLedgerPage />, announcements: <AnnouncementsPage />, certificates: <CertificatesPage />, leaderboard: <LeaderboardPage />, sync: <SheetSyncPage />, excel: <ExcelPage />, settings: <SettingsPage />, timetable: <TimetablePage />, quizzes: <QuizAdminPage />, analytics: <AnalyticsPage />, progress: <ProgressReportPage />, idcards: <IdCardsPage />, reminders: <RemindersPage />, report: <MonthlyReportPage />, promotion: <PromotionPage />, audit: <AuditLogPage /> }
   const studentPages = { dashboard: <StudentDashboard />, attendance: <StudentAttendancePage />, assignments: <StudentAssignmentsPage />, recordings: <StudentRecordingsPage />, announcements: <StudentAnnouncementsPage />, fees: <StudentFeesPage />, certificate: <StudentCertificatePage />, profile: <StudentProfilePage />, timetable: <StudentTimetablePage />, quizzes: <StudentQuizPage /> }
 
   if (!isLoggedIn) return <LoginPage />
