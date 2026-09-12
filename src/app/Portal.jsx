@@ -4640,32 +4640,39 @@ function IdCardsPage() {
     let seed = 0; for (let i = 0; i < (s.id || 'x').length; i++) seed = (seed * 31 + (s.id || 'x').charCodeAt(i)) % 99991
     const cells = []
     for (let i = 0; i < 144; i++) { seed = (seed * 1103515245 + 12345) % 2147483648; cells.push((seed >> 16) % 100 > 48) }
-    const qrHtml = `<div style="display:grid;grid-template-columns:repeat(12,6px);gap:1px;padding:5px;background:#fff;border-radius:4px;width:82px">${cells.map(c => `<div style="width:6px;height:6px;background:${c ? '#000' : '#fff'}"></div>`).join('')}</div>`
+    const qrHtml = `<div class="qr-wrap"><div class="qr" style="display:grid;grid-template-columns:repeat(12,6px);gap:1px;padding:5px;background:#fff;border-radius:5px;width:82px;height:82px">${cells.map(c => `<div style="width:6px;height:6px;background:${c ? '#000' : '#fff'}"></div>`).join('')}</div><div class="qr-label">SCAN TO VERIFY</div></div>`
     const w = window.open('', '_blank')
+    if (!w) { toast.error('Please allow pop-ups to generate ID card'); return }
     w.document.write(`<!DOCTYPE html><html><head><title>ID Card - ${s.full_name}</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Inter',sans-serif;background:#e5e5e5;padding:30px;display:flex;flex-wrap:wrap;gap:24px;justify-content:center;align-items:flex-start}
-.card{width:340px;height:520px;border-radius:20px;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.2);position:relative;background:#0a0a0a;display:flex;flex-direction:column}
-.top{background:linear-gradient(135deg,#FFD700,#FFA500);padding:22px 24px;text-align:center;position:relative}
-.top .logo{font-size:22px;letter-spacing:5px;font-weight:900;color:#000}
-.top .inst{font-size:8px;letter-spacing:3px;color:rgba(0,0,0,.6);font-weight:700;margin-top:2px}
-.badge-type{display:inline-block;margin-top:10px;padding:5px 16px;background:rgba(0,0,0,.12);border-radius:20px;font-size:10px;font-weight:800;letter-spacing:2px;color:#000}
-.photo-wrap{display:flex;justify-content:center;margin-top:-42px}
-.photo{width:96px;height:96px;border-radius:50%;border:4px solid #FFD700;object-fit:cover;background:#1a1a1a;display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:900;color:#FFD700}
-.mid{flex:1;padding:20px 26px;text-align:center}
-.name{font-size:21px;font-weight:800;color:#fff;margin-bottom:4px}
-.fname{font-size:11px;color:#888;margin-bottom:16px}
-.info{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
-.box{background:rgba(255,255,255,.04);border:1px solid rgba(255,215,0,.08);border-radius:10px;padding:10px}
-.box .l{font-size:8px;text-transform:uppercase;letter-spacing:1px;color:#666;font-weight:700;margin-bottom:3px}
-.box .v{font-size:12px;font-weight:700;color:#E5E7EB}
-.bottom{background:rgba(255,215,0,.04);padding:14px 24px;display:flex;align-items:center;justify-content:space-between;border-top:1px solid rgba(255,215,0,.08)}
-.valid{font-size:9px;color:#666;font-weight:700}
-.valid .d{color:#FFD700;font-size:11px}
-.sid-code{font-size:10px;font-weight:800;color:#FFD700;letter-spacing:1px}
-@media print{body{background:#fff;padding:10px;gap:12px}.card{box-shadow:none;page-break-inside:avoid}}
+html,body{min-height:100%;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+body{font-family:'Inter',sans-serif;background:#e5e5e5;padding:32px;display:flex;justify-content:center;align-items:flex-start}
+.card{width:340px;min-height:540px;border-radius:20px;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.2);position:relative;background:#0a0a0a;display:flex;flex-direction:column;flex:0 0 auto}
+.top{min-height:126px;background:linear-gradient(135deg,#FFD700,#FFA500);padding:20px 24px 48px;text-align:center;position:relative;flex:0 0 auto}
+.top .logo{font-size:22px;letter-spacing:5px;font-weight:900;color:#000;line-height:1.1}
+.top .inst{font-size:8px;letter-spacing:3px;color:rgba(0,0,0,.6);font-weight:700;margin-top:4px}
+.badge-type{display:inline-block;margin-top:10px;padding:5px 16px;background:rgba(0,0,0,.12);border-radius:20px;font-size:9px;font-weight:800;letter-spacing:2px;color:#000}
+.photo-wrap{height:0;display:flex;justify-content:center;position:relative;z-index:2;transform:translateY(-48px);flex:0 0 auto}
+.photo{width:96px;height:96px;border-radius:50%;border:4px solid #FFD700;outline:3px solid #0a0a0a;object-fit:cover;background:#1a1a1a;display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:900;color:#FFD700;overflow:hidden}
+.mid{flex:1;padding:58px 24px 16px;text-align:center;display:flex;flex-direction:column;align-items:stretch;min-height:0}
+.name{font-size:20px;line-height:1.2;font-weight:800;color:#fff;margin:0 auto 5px;max-width:280px;overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.fname{font-size:10px;line-height:1.35;color:#888;margin-bottom:14px;min-height:14px;overflow-wrap:anywhere}
+.info{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:9px;margin-bottom:13px;width:100%}
+.box{min-width:0;background:rgba(255,255,255,.04);border:1px solid rgba(255,215,0,.08);border-radius:10px;padding:9px 7px}
+.box .l{font-size:7px;text-transform:uppercase;letter-spacing:.9px;color:#666;font-weight:700;margin-bottom:4px}
+.box .v{font-size:10px;line-height:1.25;font-weight:700;color:#E5E7EB;overflow-wrap:anywhere;word-break:break-word;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;min-height:25px}
+.qr-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;margin:auto auto 0}
+.qr{flex:0 0 auto}
+.qr-label{font-size:6px;letter-spacing:1.5px;color:#666;font-weight:800;margin-top:5px}
+.bottom{min-height:56px;background:rgba(255,215,0,.04);padding:12px 22px;display:flex;align-items:center;justify-content:space-between;gap:12px;border-top:1px solid rgba(255,215,0,.08);flex:0 0 auto}
+.valid{font-size:8px;color:#666;font-weight:700;line-height:1.35}
+.valid .d{color:#FFD700;font-size:10px;white-space:nowrap}
+.sid-code{font-size:9px;font-weight:800;color:#FFD700;letter-spacing:.7px;text-align:right;overflow-wrap:anywhere}
+@page{size:A4 portrait;margin:12mm}
+@media print{html,body{width:100%;height:auto}body{background:#fff;padding:0;display:flex;justify-content:center;align-items:flex-start}.card{width:340px;min-height:540px;max-height:none;box-shadow:none;page-break-inside:avoid;break-inside:avoid;border-radius:18px}}
+@media(max-width:390px){body{padding:16px}.card{width:100%;max-width:340px}}
 </style></head><body>
 <div class="card">
 <div class="top">
