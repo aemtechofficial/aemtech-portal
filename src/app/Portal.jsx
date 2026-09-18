@@ -125,39 +125,55 @@ const buildJourney = (present = 0) => CURRICULUM.map((mod, idx) => {
   const progress = mod.classes > 0 ? Math.min(100, Math.round((attended / mod.classes) * 100)) : 0
   return { ...mod, startClass, attended, progress, isLocked: present < startClass }
 })
-const FEE_MONTHS = [
-  { key:'m1', label:'Month 1', sub:'Canva Designing',   icon:'🎨', color:'#FFD700' },
-  { key:'m2', label:'Month 2', sub:'Shopify + AI',      icon:'🛒', color:'#10B981' },
-  { key:'m3', label:'Month 3', sub:'Digital Marketing', icon:'📈', color:'#3B82F6' },
+const MONTH_META = [
+  { sub:'Canva Designing',   icon:'🎨', color:'#FFD700' },
+  { sub:'Shopify + AI',      icon:'🛒', color:'#10B981' },
+  { sub:'Digital Marketing', icon:'📈', color:'#3B82F6' },
+  { sub:'Extended Module',   icon:'🚀', color:'#8B5CF6' },
+  { sub:'Extended Module',   icon:'⭐', color:'#EC4899' },
+  { sub:'Extended Module',   icon:'💎', color:'#06B6D4' },
 ]
-// split a student's total fee + paid amount into 3 monthly buckets
+// ── fee helpers ──────────────────────────────────────────
+// fee_amount  = MONTHLY fee (e.g. 200)
+// total_fee   = TOTAL course fee (e.g. 600). Falls back to monthly × 3.
+const monthlyFeeOf = s => Number(s?.fee_amount) || 0
+const totalFeeOf = s => { const t = Number(s?.total_fee); if (t > 0) return t; const m = monthlyFeeOf(s); return m > 0 ? m * 3 : 0 }
+const monthsCountOf = s => { const m = monthlyFeeOf(s), t = totalFeeOf(s); if (m <= 0) return t > 0 ? 1 : 3; return Math.max(1, Math.ceil(t / m)) }
+const dueOf = s => Math.max(0, totalFeeOf(s) - (Number(s?.fee_paid) || 0))
+const feeStatusOf = s => { const t = totalFeeOf(s), p = Number(s?.fee_paid) || 0; if (t <= 0) return 'pending'; return p >= t ? 'paid' : p > 0 ? 'partial' : 'pending' }
+// how many full months are still unpaid
+const monthsDueOf = s => { const m = monthlyFeeOf(s); if (m <= 0) return 0; return Math.ceil(dueOf(s) / m) }
+const monthsPaidOf = s => { const m = monthlyFeeOf(s); if (m <= 0) return 0; return Math.floor((Number(s?.fee_paid) || 0) / m) }
+
+// Build monthly installment buckets from monthly + total fee
 const splitFeeByMonth = (student, payments = []) => {
-  const totalFee = student?.fee_amount || 0
-  const perMonth = Math.round(totalFee / 3)
-  const buckets = FEE_MONTHS.map((m, i) => ({
-    ...m,
-    due: i === 2 ? totalFee - perMonth * 2 : perMonth, // last month absorbs rounding
-    paid: 0,
-  }))
-  // 1) apply explicit monthly payments if installment_no / month_index present
+  const monthly = monthlyFeeOf(student)
+  const total = totalFeeOf(student)
+  const n = monthsCountOf(student)
+  const buckets = Array.from({ length: n }, (_, i) => {
+    const meta = MONTH_META[i] || { sub: 'Module ' + (i + 1), icon: '📘', color: '#6B7280' }
+    const base = monthly > 0 ? monthly : Math.round(total / n)
+    const allocatedBefore = base * i
+    const due = i === n - 1 ? Math.max(0, total - allocatedBefore) : Math.min(base, Math.max(0, total - allocatedBefore))
+    return { key: 'm' + (i + 1), label: 'Month ' + (i + 1), ...meta, due, paid: 0 }
+  })
+  // 1) explicit installment payments (installment_no / month_index)
   let matched = 0
   payments.forEach(p => {
     const idx = Number(p.installment_no ?? p.month_index)
-    if (idx >= 1 && idx <= 3) { buckets[idx - 1].paid += (p.paid_amount || p.amount || 0); matched += (p.paid_amount || p.amount || 0) }
+    if (idx >= 1 && idx <= n) { const amt = p.paid_amount || p.amount || 0; buckets[idx - 1].paid += amt; matched += amt }
   })
-  // 2) waterfall the remaining paid amount across months (M1 → M2 → M3)
-  let remaining = Math.max(0, (student?.fee_paid || 0) - matched)
-  buckets.forEach(b => {
-    const room = Math.max(0, b.due - b.paid)
-    const take = Math.min(room, remaining)
-    b.paid += take; remaining -= take
-  })
+  // 2) waterfall remaining paid amount M1 → M2 → …
+  let remaining = Math.max(0, (Number(student?.fee_paid) || 0) - matched)
+  buckets.forEach(b => { const room = Math.max(0, b.due - b.paid); const take = Math.min(room, remaining); b.paid += take; remaining -= take })
   return buckets.map(b => ({
     ...b,
     balance: Math.max(0, b.due - b.paid),
-    status: b.due === 0 ? 'pending' : b.paid >= b.due ? 'paid' : b.paid > 0 ? 'partial' : 'pending',
+    status: b.due === 0 ? 'paid' : b.paid >= b.due ? 'paid' : b.paid > 0 ? 'partial' : 'pending',
   }))
 }
+// legacy alias used by aggregate views (first 3 months meta)
+const FEE_MONTHS = [0,1,2].map(i => ({ key:'m'+(i+1), label:'Month '+(i+1), ...MONTH_META[i] }))
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
 const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 const currentMonth = () => MONTHS[new Date().getMonth()]
@@ -975,7 +991,7 @@ function AdminDashboard() {
         sb.from('fee_payments').select('*').eq('status', 'overdue'),
         sb.from('attendance').select('*').order('marked_at', { ascending: false }).limit(500),
       ])
-      const allSt = sts.data || []; const totalFee = allSt.reduce((a, st) => a + (st.fee_amount || 0), 0); const totalPaid = allSt.reduce((a, st) => a + (st.fee_paid || 0), 0)
+      const allSt = sts.data || []; const totalFee = allSt.reduce((a, st) => a + totalFeeOf(st), 0); const totalPaid = allSt.reduce((a, st) => a + (st.fee_paid || 0), 0)
       setStats({ students: s.count || 0, admissions: adm.count || 0, batches: bat.count || 0, assignments: asn.count || 0, submissions: sub.count || 0, totalFee, totalPaid })
       setOverdueFees((payments.data || []).length)
       setAnns(ann.data || []); setRecent(rs.data || [])
@@ -1372,13 +1388,27 @@ function StudentsPage() {
     try {
       const act = bulkAction.type
       let done = 0
+      let missingCol = false
       for (const s of selectedStudents) {
         if (act === 'status') { await sb.from('students').update({ status: bulkAction.status }).eq('id', s.id); done++ }
         else if (act === 'batch') { await sb.from('students').update({ batch_id: bulkAction.batch_id }).eq('id', s.id); done++ }
-        else if (act === 'fee') { await sb.from('students').update({ fee_amount: parseFloat(bulkAction.fee_amount) || 0 }).eq('id', s.id); done++ }
+        else if (act === 'fee') {
+          const upd = {}
+          if (bulkAction.fee_amount !== '' && bulkAction.fee_amount != null) upd.fee_amount = parseFloat(bulkAction.fee_amount) || 0
+          if (bulkAction.total_fee !== '' && bulkAction.total_fee != null) upd.total_fee = parseFloat(bulkAction.total_fee) || 0
+          if (Object.keys(upd).length) {
+            const tf = upd.total_fee ?? totalFeeOf(s)
+            upd.fee_status = (s.fee_paid || 0) >= tf ? 'paid' : (s.fee_paid || 0) > 0 ? 'partial' : 'pending'
+            const { error } = await sb.from('students').update(upd).eq('id', s.id)
+            if (error && /total_fee/i.test(error.message || '')) { delete upd.total_fee; await sb.from('students').update(upd).eq('id', s.id); missingCol = true }
+          }
+          done++
+        }
         else if (act === 'resetPass') { await sb.from('students').update({ password: bulkAction.password || '12345678' }).eq('id', s.id); done++ }
         else if (act === 'archive') { await sb.from('students').update({ status: 'inactive' }).eq('id', s.id); done++ }
       }
+      if (missingCol) toast.error('total_fee column DB me nahi hai — Settings me SQL dekhein', { duration: 6000 })
+      logAction('BULK_' + String(act).toUpperCase(), 'Students', `${done} students`)
       toastSuccess(`${done} students updated! ✅`, { undo: async () => { for (const s of selectedStudents) { await sb.from('students').update({ status: s.status, batch_id: s.batch_id, fee_amount: s.fee_amount, password: s.password }).eq('id', s.id) } load() }, duration: 5000 })
       setBulkActionModal(null); setSelectedIds([]); load()
     } catch { toast.error('Bulk action failed') }
@@ -1445,9 +1475,10 @@ function StudentsPage() {
     msg=msg.replace(/{name}/g,student.full_name||'')
            .replace(/{email}/g,student.login_email||student.email||'')
            .replace(/{password}/g,student.password||'12345678')
-           .replace(/{fee}/g,currency(student.fee_amount))
+           .replace(/{fee}/g,currency(totalFeeOf(student)))
            .replace(/{paid}/g,currency(student.fee_paid))
-           .replace(/{due}/g,currency((student.fee_amount||0)-(student.fee_paid||0)))
+           .replace(/{due}/g,currency(dueOf(student)))
+           .replace(/{months}/g,String(monthsDueOf(student)))
     const phone=formatPhone(student.phone)
     if(!phone){toast.error('Student ka phone number nahi hai!');return}
     const url=`https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(msg)}`
@@ -1568,7 +1599,8 @@ function StudentsPage() {
         <div style={{fontSize:12,fontWeight:700,color:'#FFD700',marginBottom:18,marginTop:10,textTransform:'uppercase',letterSpacing:1.5,display:'flex',alignItems:'center',gap:8}}><div style={{width:3,height:14,background:G,borderRadius:3}}/>Login & Account</div>
         <Grid>
           <Inp label="Password" value={form.password||'12345678'} onChange={e=>setForm({...form,password:e.target.value})} helper="Default: 12345678"/>
-          <Inp label="Monthly Fee (PKR)" type="number" value={form.fee_amount||''} onChange={e=>setForm({...form,fee_amount:e.target.value})} placeholder="5000"/>
+          <Inp label="Monthly Fee (PKR)" type="number" value={form.fee_amount||''} onChange={e=>setForm({...form,fee_amount:e.target.value})} placeholder="200"/>
+          <Inp label="Total Course Fee (PKR)" type="number" value={form.total_fee||''} onChange={e=>setForm({...form,total_fee:e.target.value})} placeholder="600" helper={form.fee_amount&&form.total_fee?`${Math.max(1,Math.ceil(Number(form.total_fee)/Number(form.fee_amount)))} installments`:'Blank = monthly × 3'}/>
           <Sel label="Fee Status" value={form.fee_status||'pending'} onChange={e=>setForm({...form,fee_status:e.target.value})}><option value="pending">Pending</option><option value="partial">Partial</option><option value="paid">Paid</option></Sel>
           <Sel label="Status" value={form.status||'active'} onChange={e=>setForm({...form,status:e.target.value})}><option value="active">Active</option><option value="inactive">Inactive</option><option value="graduated">Graduated</option></Sel>
         </Grid>
@@ -1673,8 +1705,14 @@ function StudentsPage() {
       </Modal>
 
       <Modal open={bulkActionModal==='fee'} onClose={()=>setBulkActionModal(null)} title={`💰 Set Fee — ${selectedIds.length} Students`} icon="💰" footer={<><Btn type="ghost" onClick={()=>setBulkActionModal(null)}>Cancel</Btn><Btn type="success" onClick={runBulkAction} loading={bulkBusy}>💰 Apply to All</Btn></>}>
-        <Inp label="Monthly Fee (PKR)" type="number" required value={bulkAction.fee_amount||''} onChange={e=>setBulkAction({...bulkAction,fee_amount:e.target.value})} placeholder="5000"/>
-        <div style={{fontSize:12,color:'#6B7280'}}>Yeh fee amount {selectedIds.length} students par apply hoga.</div>
+        <Grid>
+          <Inp label="Monthly Fee (PKR)" type="number" value={bulkAction.fee_amount||''} onChange={e=>setBulkAction({...bulkAction,fee_amount:e.target.value})} placeholder="200"/>
+          <Inp label="Total Course Fee (PKR)" type="number" value={bulkAction.total_fee||''} onChange={e=>setBulkAction({...bulkAction,total_fee:e.target.value})} placeholder="600"/>
+        </Grid>
+        <div style={{...getGlassLight(dark),borderRadius:12,padding:14,fontSize:12,color:'#6B7280'}}>
+          {selectedIds.length} students par apply hoga. Jo field khali chhorenge woh change nahi hogi.
+          {bulkAction.fee_amount&&bulkAction.total_fee&&<div style={{color:'#FFD700',fontWeight:700,marginTop:6}}>→ {Math.max(1,Math.ceil(Number(bulkAction.total_fee)/Number(bulkAction.fee_amount)))} installments of {currency(Number(bulkAction.fee_amount))}</div>}
+        </div>
       </Modal>
 
       <Modal open={bulkActionModal==='resetPass'} onClose={()=>setBulkActionModal(null)} title={`🔑 Reset Password — ${selectedIds.length} Students`} icon="🔑" footer={<><Btn type="ghost" onClick={()=>setBulkActionModal(null)}>Cancel</Btn><Btn onClick={runBulkAction} loading={bulkBusy}>🔑 Reset All</Btn></>}>
@@ -1739,7 +1777,7 @@ function FeesPage() {
 
   const batchStudents=selectedBatch?students.filter(s=>s.batch_id===selectedBatch):students
   const activeStudents=batchStudents.filter(s=>s.status==='active')
-  const totalFee=activeStudents.reduce((s,st)=>s+(st.fee_amount||0),0)
+  const totalFee=activeStudents.reduce((s,st)=>s+totalFeeOf(st),0)
   const totalPaid=batchStudents.reduce((s,st)=>s+(st.fee_paid||0),0)
   const totalDue=totalFee-totalPaid
   const paidCount=batchStudents.filter(s=>s.fee_status==='paid').length
@@ -1753,13 +1791,43 @@ function FeesPage() {
     return true
   })
 
+  // ── batch-wide fee setter ──
+  const [batchFeeModal,setBatchFeeModal]=useState(false)
+  const [batchFeeForm,setBatchFeeForm]=useState({batch_id:'',fee_amount:'',total_fee:''})
+  const [batchFeeBusy,setBatchFeeBusy]=useState(false)
+  const applyBatchFee=async()=>{
+    const {batch_id,fee_amount,total_fee}=batchFeeForm
+    if(!batch_id){toast.error('Batch select karein');return}
+    if(!fee_amount&&!total_fee){toast.error('Monthly ya Total fee daalein');return}
+    const targets=students.filter(s=>s.batch_id===batch_id&&s.status==='active')
+    if(targets.length===0){toast.error('Is batch me koi active student nahi');return}
+    setBatchFeeBusy(true)
+    const before=targets.map(s=>({id:s.id,fee_amount:s.fee_amount,total_fee:s.total_fee,fee_status:s.fee_status}))
+    let done=0, missingCol=false
+    for(const st of targets){
+      const upd={}
+      if(fee_amount!=='') upd.fee_amount=parseFloat(fee_amount)||0
+      if(total_fee!=='') upd.total_fee=parseFloat(total_fee)||0
+      const tf=upd.total_fee??totalFeeOf(st)
+      upd.fee_status=(st.fee_paid||0)>=tf?'paid':(st.fee_paid||0)>0?'partial':'pending'
+      const {error}=await sb.from('students').update(upd).eq('id',st.id)
+      if(error&&/total_fee/i.test(error.message||'')){delete upd.total_fee;await sb.from('students').update(upd).eq('id',st.id);missingCol=true}
+      done++
+    }
+    const bName=batches.find(b=>b.id===batch_id)?.name||''
+    logAction('BULK_FEE','Batch',`${bName} → ${done} students`,`monthly ${fee_amount||'—'} / total ${total_fee||'—'}`)
+    if(missingCol) toast.error('total_fee column DB me nahi hai — Settings → SQL dekhein',{duration:6000})
+    toastSuccess(`${done} students ki fee set ho gayi! 💰`,{undo:async()=>{for(const b of before){await sb.from('students').update({fee_amount:b.fee_amount,total_fee:b.total_fee,fee_status:b.fee_status}).eq('id',b.id)}load()},duration:6000})
+    setBatchFeeBusy(false);setBatchFeeModal(false);load()
+  }
+
   const collectPayment=async()=>{
     if(!form.amount||form.amount<=0){toast.error('Enter valid amount');return}
     const student=students.find(s=>s.id===form.student_id)
     if(!student)return
     
     const newPaid=(student.fee_paid||0)+parseFloat(form.amount)
-    const newStatus=newPaid>=(student.fee_amount||0)?'paid':newPaid>0?'partial':'pending'
+    const newStatus=newPaid>=totalFeeOf(student)?'paid':newPaid>0?'partial':'pending'
     
     await sb.from('students').update({
       fee_paid:newPaid,
@@ -1960,15 +2028,18 @@ body{font-family:'Inter',sans-serif;background:#f5f5f5;padding:40px;display:flex
       <Card title={`💰 Students (${filtered.length})`} icon="💰" action={
         <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
           <Search value={search} onChange={e=>setSearch(e.target.value)}/>
+          <Btn size="sm" icon="🏫" onClick={()=>{setBatchFeeForm({batch_id:selectedBatch||'',fee_amount:'',total_fee:''});setBatchFeeModal(true)}}>Set Batch Fee</Btn>
           <Btn type="success" size="sm" onClick={doExport} icon="📊">Export</Btn>
           <Btn type="outline" size="sm" icon="📊" onClick={()=>openSheet('fees')}>Sheet</Btn>
         </div>
       } noPadding>
         <Tbl headers={['Student','Batch','Fee Amount','Paid','Due','M1','M2','M3','Status','Actions']} empty={filtered.length===0?<Empty icon="💰" title="No students"/>:null}>
           {filtered.map((s,i)=>{
-            const due=(s.fee_amount||0)-(s.fee_paid||0)
-            const pct=s.fee_amount>0?Math.round((s.fee_paid||0)/(s.fee_amount)*100):0
+            const due=dueOf(s)
+            const tf=totalFeeOf(s)
+            const pct=tf>0?Math.round((s.fee_paid||0)/tf*100):0
             const mb=splitFeeByMonth(s,[])
+            const mDue=monthsDueOf(s)
             return(
               <TR key={s.id} delay={i*.025}>
                 <TD>
@@ -1981,9 +2052,9 @@ body{font-family:'Inter',sans-serif;background:#f5f5f5;padding:40px;display:flex
                   </div>
                 </TD>
                 <TD style={{fontSize:12}}>{batches.find(b=>b.id===s.batch_id)?.name||'—'}</TD>
-                <TD><div style={{fontWeight:700,fontSize:15,color:'#FFD700',fontFamily:"'Space Grotesk',sans-serif"}}>{currency(s.fee_amount)}</div></TD>
-                <TD><div style={{fontWeight:700,color:'#10B981'}}>{currency(s.fee_paid)}</div></TD>
-                <TD><div style={{fontWeight:600,color:due>0?'#EF4444':'#10B981'}}>{currency(due)}</div></TD>
+                <TD><div style={{fontWeight:700,fontSize:15,color:'#FFD700',fontFamily:"'Space Grotesk',sans-serif"}}>{currency(tf)}</div><div style={{fontSize:10,color:'#6B7280',marginTop:2}}>{currency(monthlyFeeOf(s))}/mo × {monthsCountOf(s)}</div></TD>
+                <TD><div style={{fontWeight:700,color:'#10B981'}}>{currency(s.fee_paid)}</div><div style={{fontSize:10,color:'#6B7280',marginTop:2}}>{monthsPaidOf(s)} mo paid</div></TD>
+                <TD><div style={{fontWeight:600,color:due>0?'#EF4444':'#10B981'}}>{currency(due)}</div>{mDue>0&&<div style={{fontSize:10,color:'#EF4444',marginTop:2,fontWeight:700}}>{mDue} month{mDue>1?'s':''} due</div>}</TD>
                 {mb.map(m=>(
                   <TD key={m.key}>
                     <div style={{display:'inline-flex',flexDirection:'column',alignItems:'center',gap:3,minWidth:58}}>
@@ -1997,7 +2068,7 @@ body{font-family:'Inter',sans-serif;background:#f5f5f5;padding:40px;display:flex
                     </div>
                   </TD>
                 ))}
-                <TD><Bdg type={statusBadge(s.fee_status)} dot>{s.fee_status||'pending'}</Bdg><div style={{fontSize:9,color:'#6B7280',marginTop:4}}>{pct}% overall</div></TD>
+                <TD><Bdg type={statusBadge(feeStatusOf(s))} dot>{feeStatusOf(s)}</Bdg><div style={{fontSize:9,color:'#6B7280',marginTop:4}}>{pct}% overall</div></TD>
                 <TD>
                   <div style={{display:'flex',gap:6}}>
                     <Btn type="success" size="xs" onClick={()=>{setForm({student_id:s.id,student_name:s.full_name,current_paid:s.fee_paid||0,fee_amount:s.fee_amount||0,amount:''});setModal('collect')}} title="Collect">💰</Btn>
@@ -2013,6 +2084,29 @@ body{font-family:'Inter',sans-serif;background:#f5f5f5;padding:40px;display:flex
       </Card>
 
       {/* Collect Payment Modal */}
+      {/* Batch Fee Setter */}
+      <Modal open={batchFeeModal} onClose={()=>setBatchFeeModal(false)} title="🏫 Set Fee for Whole Batch" icon="🏫" footer={<><Btn type="ghost" onClick={()=>setBatchFeeModal(false)}>Cancel</Btn><Btn onClick={applyBatchFee} loading={batchFeeBusy}>💰 Apply to Batch</Btn></>}>
+        <Sel label="Batch" required value={batchFeeForm.batch_id} onChange={e=>setBatchFeeForm({...batchFeeForm,batch_id:e.target.value})}>
+          <option value="">Select Batch</option>
+          {batches.map(b=><option key={b.id} value={b.id}>{b.name} ({students.filter(x=>x.batch_id===b.id&&x.status==='active').length} active)</option>)}
+        </Sel>
+        <Grid>
+          <Inp label="Monthly Fee (PKR)" type="number" value={batchFeeForm.fee_amount} onChange={e=>setBatchFeeForm({...batchFeeForm,fee_amount:e.target.value})} placeholder="200"/>
+          <Inp label="Total Course Fee (PKR)" type="number" value={batchFeeForm.total_fee} onChange={e=>setBatchFeeForm({...batchFeeForm,total_fee:e.target.value})} placeholder="600"/>
+        </Grid>
+        <div style={{...getGlassLight(dark),borderRadius:14,padding:16,borderLeft:'3px solid #FFD700'}}>
+          {batchFeeForm.batch_id ? (()=>{
+            const tg=students.filter(x=>x.batch_id===batchFeeForm.batch_id&&x.status==='active')
+            const inst=batchFeeForm.fee_amount&&batchFeeForm.total_fee?Math.max(1,Math.ceil(Number(batchFeeForm.total_fee)/Number(batchFeeForm.fee_amount))):null
+            return (<>
+              <div style={{fontSize:13,fontWeight:700,color:'#FFD700',marginBottom:6}}>{tg.length} active students affected</div>
+              {inst&&<div style={{fontSize:12,color:'#10B981',fontWeight:700,marginBottom:6}}>→ {inst} installments × {currency(Number(batchFeeForm.fee_amount))} = {currency(Number(batchFeeForm.total_fee))}</div>}
+              <div style={{fontSize:11,color:'#6B7280'}}>Khali field change nahi hogi · Undo available hoga</div>
+            </>)
+          })() : <div style={{fontSize:12,color:'#6B7280'}}>Batch select karein to preview dikhega</div>}
+        </div>
+      </Modal>
+
       <Modal open={modal==='collect'} onClose={()=>setModal(null)} title="💰 Collect Payment" icon="💰" footer={<><Btn type="ghost" onClick={()=>setModal(null)}>Cancel</Btn><Btn type="success" onClick={collectPayment}>💰 Record Payment</Btn></>}>
         {form.student_name&&<>
           <div style={{display:'flex',alignItems:'center',gap:14,marginBottom:22,...getGlassLight(dark),borderRadius:16,padding:18}}>
@@ -2256,7 +2350,8 @@ function AdmissionsPage(){
               <option value="">Select Batch</option>
               {batches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}
             </Sel>
-            <Inp label="Monthly Fee (PKR)" type="number" placeholder="5000" onChange={e=>setForm({...form,fee_amount:e.target.value})}/>
+            <Inp label="Monthly Fee (PKR)" type="number" placeholder="200" onChange={e=>setForm({...form,fee_amount:e.target.value})}/>
+            <Inp label="Total Course Fee (PKR)" type="number" placeholder="600" onChange={e=>setForm({...form,total_fee:e.target.value})}/>
             <Inp label="Password" defaultValue="12345678" onChange={e=>setForm({...form,password:e.target.value})}/>
           </Grid>
         </>}
@@ -2586,9 +2681,46 @@ function SettingsPage(){
           <Btn onClick={changePass}>🔒 Change</Btn>
         </Card>
         
+        <Card title="🗄️ Database Setup" icon="🗄️" style={{marginTop:22}}>
+          <div style={{fontSize:12,color:'#6B7280',marginBottom:12,lineHeight:1.7}}>
+            Total course fee ke liye Supabase me yeh column chahiye. <strong style={{color:'#FFD700'}}>Supabase → SQL Editor</strong> me run karein:
+          </div>
+          <pre style={{background:dark?'rgba(0,0,0,.4)':'#0f172a',color:'#10B981',padding:'16px 18px',borderRadius:12,fontSize:12,overflowX:'auto',fontFamily:'monospace',lineHeight:1.7,border:'1px solid rgba(255,215,0,.08)'}}>{`ALTER TABLE students
+  ADD COLUMN IF NOT EXISTS total_fee numeric DEFAULT 0;
+
+ALTER TABLE submissions
+  ADD COLUMN IF NOT EXISTS rubric text;
+
+ALTER TABLE fee_payments
+  ADD COLUMN IF NOT EXISTS installment_no int;
+
+CREATE TABLE IF NOT EXISTS timetable (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  batch_id uuid, day text, time text,
+  subject text, instructor text, notes text,
+  created_at timestamptz DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS quizzes (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  batch_id uuid, title text, description text,
+  questions text, duration_minutes int,
+  total_marks int, status text DEFAULT 'draft',
+  created_at timestamptz DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS quiz_attempts (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  quiz_id uuid, student_id uuid,
+  score int, total int, answers text,
+  completed_at timestamptz DEFAULT now()
+);`}</pre>
+          <Btn type="outline" size="sm" style={{marginTop:12}} icon="📋" onClick={()=>{navigator.clipboard?.writeText(`ALTER TABLE students ADD COLUMN IF NOT EXISTS total_fee numeric DEFAULT 0;\nALTER TABLE submissions ADD COLUMN IF NOT EXISTS rubric text;\nALTER TABLE fee_payments ADD COLUMN IF NOT EXISTS installment_no int;`);toast.success('SQL copied! 📋')}}>Copy SQL</Btn>
+        </Card>
+
         <Card title="ℹ️ Info" icon="ℹ️" style={{marginTop:22}}>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
-            {[['Version','v4.0'],['Platform','Next.js'],['Database','Supabase'],['Status','✅ Live'],['Sheets','✅ Connected'],['Theme',dark?'🌙 Dark':'☀️ Light']].map(([k,v])=>(
+            {[['Version','v7.0'],['Platform','Next.js'],['Database','Supabase'],['Status','✅ Live'],['Sheets','✅ Connected'],['Theme',dark?'🌙 Dark':'☀️ Light']].map(([k,v])=>(
               <div key={k} style={{...getGlassLight(dark),borderRadius:12,padding:16}}>
                 <div style={{fontSize:10,color:'#6B7280',textTransform:'uppercase',letterSpacing:1.2,marginBottom:5}}>{k}</div>
                 <div style={{fontWeight:600,fontSize:13,color:dark?'#E5E7EB':'#1F2937'}}>{v}</div>
@@ -3146,14 +3278,20 @@ body{font-family:'Inter',sans-serif;background:#f5f5f5;padding:40px;display:flex
     <div>
       <Card title="💰 My Fee Summary" icon="💰">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 18, marginBottom: 26 }} className="mf">
-          {[['Monthly Fee', currency(st.fee_amount), '#FFD700'], ['Total Paid', currency(st.fee_paid), '#10B981'], ['Outstanding', currency(Math.max(0, due)), due > 0 ? '#EF4444' : '#10B981']].map(([l, v, c]) => (
+          {[['Total Course Fee', currency(totalFeeOf(st)), '#FFD700'], ['Total Paid', currency(st.fee_paid), '#10B981'], ['Outstanding', currency(dueOf(st)), dueOf(st) > 0 ? '#EF4444' : '#10B981']].map(([l, v, c]) => (
             <div key={l} style={{ ...getGlassLight(dark), borderRadius: 16, padding: 24, textAlign: 'center' }}>
               <div style={{ fontSize: 11, color: '#6B7280', textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 10 }}>{l}</div>
               <div style={{ fontSize: 24, fontWeight: 800, color: c, fontFamily: "'Space Grotesk',sans-serif" }}>{v}</div>
             </div>
           ))}
         </div>
-        <div style={{ marginBottom: 22 }}><PBar value={st.fee_paid || 0} max={st.fee_amount || 1} height={16} showLabel label="Overall Progress" /></div>
+        <div style={{ ...getGlassLight(dark), borderRadius: 14, padding: '14px 18px', marginBottom: 18, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+          <span style={{ fontSize: 12, color: '#6B7280' }}>💵 Monthly Fee: <strong style={{ color: '#FFD700' }}>{currency(monthlyFeeOf(st))}</strong></span>
+          <span style={{ fontSize: 12, color: '#6B7280' }}>📆 Installments: <strong style={{ color: '#3B82F6' }}>{monthsCountOf(st)}</strong></span>
+          <span style={{ fontSize: 12, color: '#6B7280' }}>✅ Paid: <strong style={{ color: '#10B981' }}>{monthsPaidOf(st)} month(s)</strong></span>
+          {monthsDueOf(st) > 0 && <span style={{ fontSize: 12, color: '#6B7280' }}>⚠️ Due: <strong style={{ color: '#EF4444' }}>{monthsDueOf(st)} month(s)</strong></span>}
+        </div>
+        <div style={{ marginBottom: 22 }}><PBar value={st.fee_paid || 0} max={totalFeeOf(st) || 1} height={16} showLabel label="Overall Progress" /></div>
 
         {/* Month-wise breakdown */}
         <div style={{ marginBottom: 24 }}>
@@ -3183,7 +3321,7 @@ body{font-family:'Inter',sans-serif;background:#f5f5f5;padding:40px;display:flex
           </div>
         </div>
         <div style={{ textAlign: 'center', marginBottom: 22, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-          <Bdg type={statusBadge(st.fee_status)} size="lg" dot>{st.fee_status === 'paid' ? '✅ Fully Paid' : st.fee_status === 'partial' ? '⚠️ Partial' : '❌ Pending'}</Bdg>
+          <Bdg type={statusBadge(feeStatusOf(st))} size="lg" dot>{feeStatusOf(st) === 'paid' ? '✅ Fully Paid' : feeStatusOf(st) === 'partial' ? `⚠️ ${monthsDueOf(st)} Month(s) Due` : '❌ Pending'}</Bdg>
           {st.fee_paid > 0 && <Btn type="outline" size="sm" onClick={printOverallReceipt} icon="🧾">Download Receipt</Btn>}
         </div>
         {due > 0 && (
@@ -4214,7 +4352,7 @@ function ProgressReportPage() {
     const avgMarks = gradedSubs.length > 0 ? Math.round(gradedSubs.reduce((a, s) => a + (s.marks_obtained || 0), 0) / gradedSubs.length) : 0
     const overallGrade = attPct >= 80 && avgMarks >= 80 ? 'A+' : attPct >= 70 && avgMarks >= 70 ? 'A' : attPct >= 60 && avgMarks >= 60 ? 'B' : attPct >= 50 && avgMarks >= 50 ? 'C' : 'D'
     const feeStatus = student.fee_status || 'pending'
-    const feePaid = student.fee_paid || 0; const feeTotal = student.fee_amount || 0
+    const feePaid = student.fee_paid || 0; const feeTotal = totalFeeOf(student)
 
     const w = window.open('', '_blank')
     w.document.write(`<!DOCTYPE html><html><head><title>Progress Report - ${student.full_name}</title>
@@ -4363,7 +4501,7 @@ function TaskCenterPage() {
       // Ungraded submissions
       const ungraded = (subs.data || []).filter(s => s.marks_obtained == null)
       // Overdue fees (students with due > 0)
-      const feeDue = allStudents.filter(s => (s.fee_amount || 0) - (s.fee_paid || 0) > 0 && s.status === 'active')
+      const feeDue = allStudents.filter(s => dueOf(s) > 0 && s.status === 'active')
       // Assignments due soon (next 3 days)
       const soon = new Date(Date.now() + 3 * 86400000).toISOString()
       const upcomingAsn = allAsns.filter(a => a.due_date >= today && a.due_date <= soon)
@@ -4396,7 +4534,7 @@ function TaskCenterPage() {
     { key: 'admissions', icon: '📋', title: 'Pending Admissions', count: data.pendingAdm.length, color: '#F59E0B', page: 'admissions', desc: 'Applications waiting for review' },
     { key: 'classes', icon: '📅', title: "Today's Classes", count: data.todayClasses.length, color: '#3B82F6', page: 'classes', desc: data.todayClasses.length > 0 ? data.todayClasses.map(c => 'C' + c.class_number).join(', ') : 'No classes today' },
     { key: 'ungraded', icon: '📤', title: 'Ungraded Submissions', count: data.ungraded.length, color: '#8B5CF6', page: 'submissions', desc: 'Need to be graded' },
-    { key: 'fees', icon: '💰', title: 'Fee Due Students', count: data.feeDue.length, color: '#EF4444', page: 'fees', desc: currency(data.feeDue.reduce((a, s) => a + ((s.fee_amount || 0) - (s.fee_paid || 0)), 0)) + ' outstanding' },
+    { key: 'fees', icon: '💰', title: 'Fee Due Students', count: data.feeDue.length, color: '#EF4444', page: 'fees', desc: currency(data.feeDue.reduce((a, s) => a + dueOf(s), 0)) + ' outstanding' },
     { key: 'attendance', icon: '🚨', title: 'Low Attendance', count: data.lowAtt.length, color: '#EC4899', page: 'alerts', desc: 'Students below 80%' },
     { key: 'assignments', icon: '📝', title: 'Assignments Due Soon', count: data.upcomingAsn.length, color: '#10B981', page: 'assignments', desc: 'Due within 3 days' },
     { key: 'recordings', icon: '🎥', title: 'Missing Recordings', count: data.noRecording.length, color: '#6B7280', page: 'recordings', desc: 'Past classes without recording' },
@@ -4619,7 +4757,7 @@ function FeeLedgerPage() {
     if (!form.student_id || !form.amount) { toast.error('Student and amount required'); return }
     const student = students.find(s => s.id === form.student_id)
     const newPaid = (student?.fee_paid || 0) + parseFloat(form.amount)
-    const newStatus = newPaid >= (student?.fee_amount || 0) ? 'paid' : newPaid > 0 ? 'partial' : 'pending'
+    const newStatus = newPaid >= totalFeeOf(student) ? 'paid' : newPaid > 0 ? 'partial' : 'pending'
     await sb.from('fee_payments').insert({
       student_id: form.student_id, month: form.month || MONTHS[new Date().getMonth()], year: form.year || new Date().getFullYear(),
       amount: parseFloat(form.amount), paid_amount: parseFloat(form.amount), paid_date: new Date().toISOString().split('T')[0],
@@ -4663,9 +4801,9 @@ function FeeLedgerPage() {
           {[
             ['👤 Student', student.full_name, '#FFD700'],
             ['🏫 Batch', batches.find(b => b.id === student.batch_id)?.name || '—', '#3B82F6'],
-            ['💰 Total Fee', currency(student.fee_amount), '#F59E0B'],
+            ['💰 Total Fee', currency(totalFeeOf(student)), '#F59E0B'],
             ['✅ Paid', currency(student.fee_paid), '#10B981'],
-            ['⚠️ Due', currency((student.fee_amount || 0) - (student.fee_paid || 0)), '#EF4444'],
+            ['⚠️ Due', currency(dueOf(student)) + (monthsDueOf(student) > 0 ? ` (${monthsDueOf(student)} mo)` : ''), '#EF4444'],
             ['📊 Status', (student.fee_status || 'pending').toUpperCase(), student.fee_status === 'paid' ? '#10B981' : student.fee_status === 'partial' ? '#F59E0B' : '#EF4444'],
           ].map(([l, v, c]) => (
             <div key={l} className="ch" style={{ ...getGlass(dark), borderRadius: 16, padding: 20, borderTop: `3px solid ${c}` }}>
@@ -4727,7 +4865,7 @@ function FeeLedgerPage() {
       <Modal open={modal} onClose={() => setModal(false)} title="💰 Record Fee Payment" icon="💰" footer={<><Btn type="ghost" onClick={() => setModal(false)}>Cancel</Btn><Btn type="success" onClick={savePayment}>💰 Record Payment</Btn></>}>
         <Sel label="Student" required value={form.student_id || ''} onChange={e => setForm({ ...form, student_id: e.target.value })}>
           <option value="">Select Student</option>
-          {students.map(s => <option key={s.id} value={s.id}>{s.full_name} (Due: {currency((s.fee_amount || 0) - (s.fee_paid || 0))})</option>)}
+          {students.map(s => <option key={s.id} value={s.id}>{s.full_name} (Due: {currency(dueOf(s))}{monthsDueOf(s) > 0 ? ` · ${monthsDueOf(s)} mo` : ''})</option>)}
         </Sel>
         <Grid>
           <Sel label="Month" value={form.month || ''} onChange={e => setForm({ ...form, month: e.target.value })}>
@@ -4905,8 +5043,8 @@ function RemindersPage() {
   const todayClasses = classes.filter(c => c.date === today)
 
   let targets = []
-  if (tab === 'fee') targets = students.filter(s => s.status === 'active' && (s.fee_amount || 0) - (s.fee_paid || 0) > 0)
-    .map(s => ({ ...s, vars: { fee: currency(s.fee_amount), paid: currency(s.fee_paid), due: currency((s.fee_amount || 0) - (s.fee_paid || 0)) } }))
+  if (tab === 'fee') targets = students.filter(s => s.status === 'active' && dueOf(s) > 0)
+    .map(s => ({ ...s, vars: { fee: currency(totalFeeOf(s)), paid: currency(s.fee_paid), due: currency(dueOf(s)), months: String(monthsDueOf(s)) } }))
   else if (tab === 'class') {
     const tc = selBatch ? todayClasses.filter(c => c.batch_id === selBatch) : todayClasses
     const bIds = [...new Set(tc.map(c => c.batch_id))]
@@ -5043,8 +5181,8 @@ function MonthlyReportPage() {
   const mSubs = data.submissions.filter(s => inMonth(s.submitted_at))
   const mAtt = data.attendance.filter(a => inMonth(a.marked_at || a.created_at))
   const presentRate = mAtt.length > 0 ? Math.round(mAtt.filter(a => a.status === 'present').length / mAtt.length * 100) : 0
-  const dueStudents = data.students.filter(s => s.status === 'active' && (s.fee_amount || 0) - (s.fee_paid || 0) > 0)
-  const totalDue = dueStudents.reduce((a, s) => a + ((s.fee_amount || 0) - (s.fee_paid || 0)), 0)
+  const dueStudents = data.students.filter(s => s.status === 'active' && dueOf(s) > 0)
+  const totalDue = dueStudents.reduce((a, s) => a + dueOf(s), 0)
 
   // Top performers
   const ranked = data.students.filter(s => s.status === 'active').map(s => {
@@ -5118,7 +5256,7 @@ ${ranked.map((s,i) => `<tr><td style="font-weight:800;color:${i<3?'#d97706':'#66
 
 <div class="sec"><h2>⚠️ Fee Defaulters (${dueStudents.length})</h2><table>
 <tr><th>Student</th><th>Batch</th><th>Fee</th><th>Paid</th><th>Due</th></tr>
-${dueStudents.slice(0,25).map(s => `<tr><td style="font-weight:700">${s.full_name}</td><td>${data.batches.find(b=>b.id===s.batch_id)?.name||'—'}</td><td>PKR ${(s.fee_amount||0).toLocaleString()}</td><td>PKR ${(s.fee_paid||0).toLocaleString()}</td><td style="color:#dc2626;font-weight:700">PKR ${((s.fee_amount||0)-(s.fee_paid||0)).toLocaleString()}</td></tr>`).join('')}
+${dueStudents.slice(0,25).map(s => `<tr><td style="font-weight:700">${s.full_name}</td><td>${data.batches.find(b=>b.id===s.batch_id)?.name||'—'}</td><td>PKR ${totalFeeOf(s).toLocaleString()}</td><td>PKR ${(s.fee_paid||0).toLocaleString()}</td><td style="color:#dc2626;font-weight:700">PKR ${dueOf(s).toLocaleString()}</td></tr>`).join('')}
 </table></div>
 </div>
 <div class="ft"><p style="font-size:12px;color:#666;font-weight:600;margin-bottom:6px">AEMTECH Institute — Design the Future</p><p>Computer generated monthly report • ${month} ${year}</p></div>
