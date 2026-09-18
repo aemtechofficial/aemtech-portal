@@ -107,6 +107,57 @@ const logAction = (action, entity, detail = '', meta = '') => {
 }
 const getAuditLogs = () => { if (typeof window === 'undefined') return []; try { return JSON.parse(localStorage.getItem(AUDIT_KEY) || '[]') } catch { return [] } }
 const RUBRIC_FIELDS = [['design','🎨 Design & Layout',20],['creativity','✨ Creativity',20],['accuracy','🎯 Accuracy',20],['completion','📋 Completion',20],['timeliness','⏰ Timeliness',20]]
+
+// ═══ CURRICULUM — shared across student + admin learning journey ═══
+const CURRICULUM = [
+  { key:'orientation', module:'Orientation', title:'Welcome & Setup',          classes:1, icon:'🎯', color:'#8B5CF6' },
+  { key:'canva',       module:'Month 1',     title:'Canva Designing',          classes:8, icon:'🎨', color:'#FFD700' },
+  { key:'bonus',       module:'Bonus',       title:'Client Hunting & Talks',   classes:1, icon:'🤝', color:'#EC4899' },
+  { key:'shopify',     module:'Month 2',     title:'Shopify + AI',             classes:8, icon:'🛒', color:'#10B981' },
+  { key:'marketing',   module:'Month 3',     title:'Digital Marketing',        classes:8, icon:'📈', color:'#3B82F6' },
+]
+const CURRICULUM_TOTAL = CURRICULUM.reduce((a, m) => a + m.classes, 0) // 26
+// cumulative start index for each module
+const CURRICULUM_STARTS = CURRICULUM.reduce((acc, m, i) => { acc.push(i === 0 ? 0 : acc[i-1] + CURRICULUM[i-1].classes); return acc }, [])
+const buildJourney = (present = 0) => CURRICULUM.map((mod, idx) => {
+  const startClass = CURRICULUM_STARTS[idx]
+  const attended = Math.max(0, Math.min(present - startClass, mod.classes))
+  const progress = mod.classes > 0 ? Math.min(100, Math.round((attended / mod.classes) * 100)) : 0
+  return { ...mod, startClass, attended, progress, isLocked: present < startClass }
+})
+const FEE_MONTHS = [
+  { key:'m1', label:'Month 1', sub:'Canva Designing',   icon:'🎨', color:'#FFD700' },
+  { key:'m2', label:'Month 2', sub:'Shopify + AI',      icon:'🛒', color:'#10B981' },
+  { key:'m3', label:'Month 3', sub:'Digital Marketing', icon:'📈', color:'#3B82F6' },
+]
+// split a student's total fee + paid amount into 3 monthly buckets
+const splitFeeByMonth = (student, payments = []) => {
+  const totalFee = student?.fee_amount || 0
+  const perMonth = Math.round(totalFee / 3)
+  const buckets = FEE_MONTHS.map((m, i) => ({
+    ...m,
+    due: i === 2 ? totalFee - perMonth * 2 : perMonth, // last month absorbs rounding
+    paid: 0,
+  }))
+  // 1) apply explicit monthly payments if installment_no / month_index present
+  let matched = 0
+  payments.forEach(p => {
+    const idx = Number(p.installment_no ?? p.month_index)
+    if (idx >= 1 && idx <= 3) { buckets[idx - 1].paid += (p.paid_amount || p.amount || 0); matched += (p.paid_amount || p.amount || 0) }
+  })
+  // 2) waterfall the remaining paid amount across months (M1 → M2 → M3)
+  let remaining = Math.max(0, (student?.fee_paid || 0) - matched)
+  buckets.forEach(b => {
+    const room = Math.max(0, b.due - b.paid)
+    const take = Math.min(room, remaining)
+    b.paid += take; remaining -= take
+  })
+  return buckets.map(b => ({
+    ...b,
+    balance: Math.max(0, b.due - b.paid),
+    status: b.due === 0 ? 'pending' : b.paid >= b.due ? 'paid' : b.paid > 0 ? 'partial' : 'pending',
+  }))
+}
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
 const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 const currentMonth = () => MONTHS[new Date().getMonth()]
@@ -553,7 +604,7 @@ function Sidebar({ page, setPage, mobileOpen, setMobileOpen }) {
   const adminNav = [
     { sec: 'Main', items: [{ id: 'dashboard', icon: '📊', label: 'Dashboard' }, { id: 'tasks', icon: '🎯', label: 'Task Center' }] },
     { sec: 'People', items: [{ id: 'students', icon: '👥', label: 'Students' }, { id: 'admissions', icon: '📋', label: 'Admissions' }, { id: 'batches', icon: '🏫', label: 'Batches' }, { id: 'idcards', icon: '🪪', label: 'ID Cards' }] },
-    { sec: 'Academic', items: [{ id: 'classes', icon: '📅', label: 'Classes' }, { id: 'attendance', icon: '✅', label: 'Attendance' }, { id: 'alerts', icon: '🚨', label: 'Attendance Alerts' }, { id: 'assignments', icon: '📝', label: 'Assignments' }, { id: 'submissions', icon: '📤', label: 'Submissions' }, { id: 'recordings', icon: '🎥', label: 'Recordings' }, { id: 'timetable', icon: '🗓', label: 'Timetable' }, { id: 'quizzes', icon: '🧠', label: 'Quizzes' }, { id: 'promotion', icon: '⏭', label: 'Batch Promotion' }] },
+    { sec: 'Academic', items: [{ id: 'classes', icon: '📅', label: 'Classes' }, { id: 'attendance', icon: '✅', label: 'Attendance' }, { id: 'alerts', icon: '🚨', label: 'Attendance Alerts' }, { id: 'assignments', icon: '📝', label: 'Assignments' }, { id: 'submissions', icon: '📤', label: 'Submissions' }, { id: 'recordings', icon: '🎥', label: 'Recordings' }, { id: 'timetable', icon: '🗓', label: 'Timetable' }, { id: 'quizzes', icon: '🧠', label: 'Quizzes' }, { id: 'journey', icon: '🚀', label: 'Learning Journey' }, { id: 'promotion', icon: '⏭', label: 'Batch Promotion' }] },
     { sec: 'Finance', items: [{ id: 'fees', icon: '💰', label: 'Fee Management' }, { id: 'ledger', icon: '📒', label: 'Fee Ledger' }, { id: 'reminders', icon: '📣', label: 'WhatsApp Reminders' }, { id: 'analytics', icon: '📈', label: 'Analytics' }] },
     { sec: 'Reports', items: [{ id: 'report', icon: '📑', label: 'Monthly Report' }, { id: 'progress', icon: '📄', label: 'Progress Report' }, { id: 'leaderboard', icon: '🏆', label: 'Leaderboard' }] },
     { sec: 'Tools', items: [{ id: 'announcements', icon: '📢', label: 'Announcements' }, { id: 'certificates', icon: '🎓', label: 'Certificates' }, { id: 'sync', icon: '🔄', label: 'Sheet Sync' }, { id: 'excel', icon: '📈', label: 'Import/Export' }, { id: 'audit', icon: '🕵️', label: 'Audit Log' }, { id: 'settings', icon: '⚙️', label: 'Settings' }] },
@@ -1805,16 +1856,22 @@ body{font-family:'Inter',sans-serif;background:#f5f5f5;padding:40px;display:flex
     w.document.close()
   }
 
-  const doExport=()=>exportXLS(batchStudents.map(s=>({
-    Student:s.full_name,
-    Email:s.email,
-    Phone:s.phone||'',
-    'Monthly Fee':s.fee_amount||0,
-    'Total Paid':s.fee_paid||0,
-    'Due Amount':(s.fee_amount||0)-(s.fee_paid||0),
-    Status:s.fee_status||'pending',
-    Batch:batches.find(b=>b.id===s.batch_id)?.name||''
-  })),'AEMTECH_Fees.xlsx','Fees')
+  const doExport=()=>exportXLS(batchStudents.map(s=>{
+    const mb=splitFeeByMonth(s,[])
+    return {
+      Student:s.full_name,
+      Email:s.email,
+      Phone:s.phone||'',
+      'Total Fee':s.fee_amount||0,
+      'Total Paid':s.fee_paid||0,
+      'Due Amount':(s.fee_amount||0)-(s.fee_paid||0),
+      'M1 Due':mb[0].due,'M1 Paid':mb[0].paid,'M1 Status':mb[0].status,
+      'M2 Due':mb[1].due,'M2 Paid':mb[1].paid,'M2 Status':mb[1].status,
+      'M3 Due':mb[2].due,'M3 Paid':mb[2].paid,'M3 Status':mb[2].status,
+      Status:s.fee_status||'pending',
+      Batch:batches.find(b=>b.id===s.batch_id)?.name||''
+    }
+  }),'AEMTECH_Fees.xlsx','Fees')
 
   if(loading) return <Loader/>
 
@@ -1861,6 +1918,43 @@ body{font-family:'Inter',sans-serif;background:#f5f5f5;padding:40px;display:flex
         ))}
       </div>
 
+      {/* Month-wise Collection Summary */}
+      <Card title="📅 Month-wise Collection" icon="📅" style={{marginBottom:26}}>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:16}}>
+          {(()=>{
+            const agg = FEE_MONTHS.map(m=>({...m,due:0,paid:0,cleared:0,pending:0}))
+            batchStudents.filter(s=>s.status==='active').forEach(st=>{
+              splitFeeByMonth(st,[]).forEach((b,bi)=>{
+                agg[bi].due+=b.due; agg[bi].paid+=b.paid
+                if(b.balance===0&&b.due>0) agg[bi].cleared++; else if(b.due>0) agg[bi].pending++
+              })
+            })
+            return agg.map(m=>{
+              const pct = m.due>0?Math.round(m.paid/m.due*100):0
+              return (
+                <div key={m.key} className="ch" style={{...getGlassLight(dark),borderRadius:18,padding:20,borderTop:`3px solid ${m.color}`}}>
+                  <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:14}}>
+                    <div style={{width:42,height:42,borderRadius:12,background:`${m.color}12`,border:`1px solid ${m.color}25`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:19}}>{m.icon}</div>
+                    <div>
+                      <div style={{fontSize:14,fontWeight:800,color:dark?'#E5E7EB':'#1F2937'}}>{m.label}</div>
+                      <div style={{fontSize:10,color:'#6B7280'}}>{m.sub}</div>
+                    </div>
+                  </div>
+                  <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:20,fontWeight:900,color:m.color,marginBottom:4}}>{currency(m.paid)}</div>
+                  <div style={{fontSize:11,color:'#6B7280',marginBottom:10}}>of {currency(m.due)} · <strong style={{color:pct>=80?'#10B981':pct>=50?'#F59E0B':'#EF4444'}}>{pct}%</strong></div>
+                  <PBar value={m.paid} max={m.due||1} height={8} color={m.color}/>
+                  <div style={{display:'flex',justifyContent:'space-between',marginTop:10,fontSize:10}}>
+                    <span style={{color:'#10B981',fontWeight:700}}>✅ {m.cleared} cleared</span>
+                    <span style={{color:'#EF4444',fontWeight:700}}>⚠️ {m.pending} pending</span>
+                  </div>
+                  <div style={{fontSize:11,color:'#EF4444',fontWeight:700,marginTop:8}}>Due: {currency(Math.max(0,m.due-m.paid))}</div>
+                </div>
+              )
+            })
+          })()}
+        </div>
+      </Card>
+
       <FilterBar filters={[{key:'fee',label:'Fee',options:['pending','partial','paid']},{key:'status',label:'Student',options:['active','inactive']}]} values={filters} onChange={setFilters}/>
 
       <Card title={`💰 Students (${filtered.length})`} icon="💰" action={
@@ -1870,10 +1964,11 @@ body{font-family:'Inter',sans-serif;background:#f5f5f5;padding:40px;display:flex
           <Btn type="outline" size="sm" icon="📊" onClick={()=>openSheet('fees')}>Sheet</Btn>
         </div>
       } noPadding>
-        <Tbl headers={['Student','Batch','Fee Amount','Paid','Due','Progress','Status','Actions']} empty={filtered.length===0?<Empty icon="💰" title="No students"/>:null}>
+        <Tbl headers={['Student','Batch','Fee Amount','Paid','Due','M1','M2','M3','Status','Actions']} empty={filtered.length===0?<Empty icon="💰" title="No students"/>:null}>
           {filtered.map((s,i)=>{
             const due=(s.fee_amount||0)-(s.fee_paid||0)
             const pct=s.fee_amount>0?Math.round((s.fee_paid||0)/(s.fee_amount)*100):0
+            const mb=splitFeeByMonth(s,[])
             return(
               <TR key={s.id} delay={i*.025}>
                 <TD>
@@ -1889,8 +1984,20 @@ body{font-family:'Inter',sans-serif;background:#f5f5f5;padding:40px;display:flex
                 <TD><div style={{fontWeight:700,fontSize:15,color:'#FFD700',fontFamily:"'Space Grotesk',sans-serif"}}>{currency(s.fee_amount)}</div></TD>
                 <TD><div style={{fontWeight:700,color:'#10B981'}}>{currency(s.fee_paid)}</div></TD>
                 <TD><div style={{fontWeight:600,color:due>0?'#EF4444':'#10B981'}}>{currency(due)}</div></TD>
-                <TD><div style={{width:80}}><PBar value={s.fee_paid||0} max={s.fee_amount||1} height={6}/></div><div style={{fontSize:10,color:'#6B7280',marginTop:3}}>{pct}%</div></TD>
-                <TD><Bdg type={statusBadge(s.fee_status)} dot>{s.fee_status||'pending'}</Bdg></TD>
+                {mb.map(m=>(
+                  <TD key={m.key}>
+                    <div style={{display:'inline-flex',flexDirection:'column',alignItems:'center',gap:3,minWidth:58}}>
+                      <span style={{fontSize:9,fontWeight:800,letterSpacing:.4,padding:'3px 8px',borderRadius:7,whiteSpace:'nowrap',
+                        background:m.status==='paid'?'rgba(16,185,129,.1)':m.status==='partial'?'rgba(245,158,11,.1)':'rgba(239,68,68,.08)',
+                        color:m.status==='paid'?'#10B981':m.status==='partial'?'#F59E0B':'#EF4444',
+                        border:`1px solid ${m.status==='paid'?'rgba(16,185,129,.2)':m.status==='partial'?'rgba(245,158,11,.2)':'rgba(239,68,68,.15)'}`}}>
+                        {m.status==='paid'?'✓ Paid':m.status==='partial'?'◐ Part':'○ Due'}
+                      </span>
+                      <span style={{fontSize:9,color:'#6B7280',whiteSpace:'nowrap'}}>{(m.paid/1000).toFixed(1)}k/{(m.due/1000).toFixed(1)}k</span>
+                    </div>
+                  </TD>
+                ))}
+                <TD><Bdg type={statusBadge(s.fee_status)} dot>{s.fee_status||'pending'}</Bdg><div style={{fontSize:9,color:'#6B7280',marginTop:4}}>{pct}% overall</div></TD>
                 <TD>
                   <div style={{display:'flex',gap:6}}>
                     <Btn type="success" size="xs" onClick={()=>{setForm({student_id:s.id,student_name:s.full_name,current_paid:s.fee_paid||0,fee_amount:s.fee_amount||0,amount:''});setModal('collect')}} title="Collect">💰</Btn>
@@ -2567,18 +2674,10 @@ function StudentDashboard() {
       {/* Learning Journey */}
       <Card title="🚀 Learning Journey" icon="🚀" delay={.1}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {[
-            { module: 'Orientation', title: 'Welcome & Setup', classes: 1, icon: '🎯', color: '#8B5CF6' },
-            { module: 'Month 1', title: 'Canva Designing', classes: 8, icon: '🎨', color: '#FFD700' },
-            { module: 'Month 2', title: 'Shopify + AI', classes: 8, icon: '🛒', color: '#10B981' },
-            { module: 'Month 3', title: 'Digital Marketing', classes: 8, icon: '📈', color: '#3B82F6' },
-          ].map((mod, idx) => {
-            // Calculate start class for each module
-            const starts = [0, 1, 9, 17] // Orientation starts at 0, Canva at 1, Shopify at 9, Marketing at 17
-            const startClass = starts[idx]
-            const attendedInModule = Math.max(0, Math.min(data.present - startClass, mod.classes))
-            const progress = mod.classes > 0 ? Math.min(100, Math.round((attendedInModule / mod.classes) * 100)) : 0
-            const isLocked = data.present < startClass
+          {buildJourney(data.present).map((mod) => {
+            const attendedInModule = mod.attended
+            const progress = mod.progress
+            const isLocked = mod.isLocked
             return (
               <div key={mod.module} style={{ ...getGlassLight(dark), borderRadius: 16, padding: '18px 22px', display: 'flex', alignItems: 'center', gap: 18, opacity: isLocked ? 0.5 : 1 }}>
                 <div style={{ width: 50, height: 50, borderRadius: 14, background: `${mod.color}12`, border: `1px solid ${mod.color}25`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>{mod.icon}</div>
@@ -2598,10 +2697,10 @@ function StudentDashboard() {
         <div style={{ marginTop: 22, ...getGlassLight(dark), borderRadius: 16, padding: '20px 24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
             <span style={{ fontSize: 15, fontWeight: 700, color: dark ? '#E5E7EB' : '#1F2937' }}>Overall Progress</span>
-            <span style={{ fontSize: 18, fontWeight: 800, color: '#FFD700', fontFamily: "'Space Grotesk',sans-serif" }}>{data.total > 0 ? Math.round((data.present / 25) * 100) : 0}%</span>
+            <span style={{ fontSize: 18, fontWeight: 800, color: '#FFD700', fontFamily: "'Space Grotesk',sans-serif" }}>{Math.min(100, Math.round((data.present / CURRICULUM_TOTAL) * 100))}%</span>
           </div>
-          <PBar value={data.present} max={25} height={14} color="#FFD700" />
-          <div style={{ fontSize: 12, color: '#6B7280', marginTop: 10 }}>{data.present}/25 classes · {Math.max(0, 25 - data.present)} remaining</div>
+          <PBar value={data.present} max={CURRICULUM_TOTAL} height={14} color="#FFD700" />
+          <div style={{ fontSize: 12, color: '#6B7280', marginTop: 10 }}>{data.present}/{CURRICULUM_TOTAL} classes · {Math.max(0, CURRICULUM_TOTAL - data.present)} remaining</div>
         </div>
       </Card>
 
@@ -3054,7 +3153,35 @@ body{font-family:'Inter',sans-serif;background:#f5f5f5;padding:40px;display:flex
             </div>
           ))}
         </div>
-        <div style={{ marginBottom: 22 }}><PBar value={st.fee_paid || 0} max={(st.fee_amount || 1) * 3} height={16} showLabel label="Overall Progress" /></div>
+        <div style={{ marginBottom: 22 }}><PBar value={st.fee_paid || 0} max={st.fee_amount || 1} height={16} showLabel label="Overall Progress" /></div>
+
+        {/* Month-wise breakdown */}
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 12, fontWeight: 800, color: '#FFD700', textTransform: 'uppercase', letterSpacing: 1.4, marginBottom: 12 }}>📅 Month-wise Breakdown</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 14 }}>
+            {splitFeeByMonth(st, payments).map(m => (
+              <div key={m.key} style={{ ...getGlassLight(dark), borderRadius: 16, padding: 18, borderLeft: `4px solid ${m.status==='paid' ? '#10B981' : m.status==='partial' ? '#F59E0B' : m.color}` }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 18 }}>{m.icon}</span>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: dark ? '#E5E7EB' : '#1F2937' }}>{m.label}</div>
+                      <div style={{ fontSize: 10, color: '#6B7280' }}>{m.sub}</div>
+                    </div>
+                  </div>
+                  <Bdg type={statusBadge(m.status)} size="sm" dot>{m.status}</Bdg>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#6B7280', marginBottom: 6 }}>
+                  <span>Paid <strong style={{ color: '#10B981' }}>{currency(m.paid)}</strong></span>
+                  <span>of {currency(m.due)}</span>
+                </div>
+                <PBar value={m.paid} max={m.due || 1} height={8} color={m.status==='paid' ? '#10B981' : m.color} />
+                {m.balance > 0 && <div style={{ fontSize: 11, color: '#EF4444', marginTop: 7, fontWeight: 700 }}>⚠️ Due: {currency(m.balance)}</div>}
+                {m.balance === 0 && <div style={{ fontSize: 11, color: '#10B981', marginTop: 7, fontWeight: 700 }}>✅ Cleared</div>}
+              </div>
+            ))}
+          </div>
+        </div>
         <div style={{ textAlign: 'center', marginBottom: 22, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
           <Bdg type={statusBadge(st.fee_status)} size="lg" dot>{st.fee_status === 'paid' ? '✅ Fully Paid' : st.fee_status === 'partial' ? '⚠️ Partial' : '❌ Pending'}</Bdg>
           {st.fee_paid > 0 && <Btn type="outline" size="sm" onClick={printOverallReceipt} icon="🧾">Download Receipt</Btn>}
@@ -5212,7 +5339,148 @@ function AuditLogPage() {
   )
 }
 
-const pageTitles = { dashboard: '📊 Dashboard', students: '👥 Students', admissions: '📋 Admissions', batches: '🏫 Batches', classes: '📅 Classes', attendance: '✅ Attendance', assignments: '📝 Assignments', submissions: '📤 Submissions', recordings: '🎥 Recordings', fees: '💰 Fee Management', announcements: '📢 Announcements', certificates: '🎓 Certificates', leaderboard: '🏆 Leaderboard', sync: '🔄 Sheet Sync', excel: '📈 Import/Export', settings: '⚙️ Settings', certificate: '🎓 My Certificate', profile: '👤 My Profile', timetable: '🗓 Timetable', quizzes: '🧠 Quizzes', analytics: '📈 Analytics', progress: '📄 Progress Report', tasks: '🎯 Task Center', alerts: '🚨 Attendance Alerts', ledger: '📒 Fee Ledger', idcards: '🪪 ID Cards', reminders: '📣 WhatsApp Reminders', report: '📑 Monthly Report', promotion: '⏭ Batch Promotion', audit: '🕵️ Audit Log' }
+// ═══════════════════════════════════════
+// ADMIN LEARNING JOURNEY — batch + per-student curriculum progress
+// ═══════════════════════════════════════
+function JourneyPage() {
+  const { dark } = useTheme()
+  const [students, setStudents] = useState([]); const [batches, setBatches] = useState([])
+  const [classes, setClasses] = useState([]); const [attendance, setAttendance] = useState([])
+  const [loading, setLoading] = useState(true); const [selBatch, setSelBatch] = useState(''); const [search, setSearch] = useState('')
+
+  useEffect(() => {
+    (async () => {
+      const [s, b, c, a] = await Promise.all([
+        sb.from('students').select('*').order('full_name'),
+        sb.from('batches').select('*'),
+        sb.from('classes').select('*'),
+        sb.from('attendance').select('*'),
+      ])
+      setStudents(s.data || []); setBatches(b.data || []); setClasses(c.data || []); setAttendance(a.data || [])
+      setLoading(false)
+    })()
+  }, [])
+
+  if (loading) return <SkeletonDashboard />
+
+  const pool = students.filter(s => s.status === 'active')
+    .filter(s => !selBatch || s.batch_id === selBatch)
+    .filter(s => !search || s.full_name?.toLowerCase().includes(search.toLowerCase()))
+
+  const withProgress = pool.map(s => {
+    const present = attendance.filter(a => a.student_id === s.id && a.status === 'present').length
+    return { ...s, present, journey: buildJourney(present), overall: Math.min(100, Math.round(present / CURRICULUM_TOTAL * 100)) }
+  }).sort((a, b) => b.present - a.present)
+
+  // batch-level module averages
+  const moduleAvg = CURRICULUM.map((mod, idx) => {
+    if (withProgress.length === 0) return { ...mod, avg: 0, completed: 0, inProgress: 0, locked: 0 }
+    let sum = 0, completed = 0, inProgress = 0, locked = 0
+    withProgress.forEach(st => {
+      const m = st.journey[idx]
+      sum += m.progress
+      if (m.progress >= 100) completed++
+      else if (m.isLocked) locked++
+      else inProgress++
+    })
+    return { ...mod, avg: Math.round(sum / withProgress.length), completed, inProgress, locked }
+  })
+
+  const avgOverall = withProgress.length > 0 ? Math.round(withProgress.reduce((a, s) => a + s.overall, 0) / withProgress.length) : 0
+  const batchClasses = selBatch ? classes.filter(c => c.batch_id === selBatch).length : classes.length
+
+  const doExport = () => exportXLS(withProgress.map(s => {
+    const row = { Student: s.full_name, Batch: batches.find(b => b.id === s.batch_id)?.name || '', 'Classes Attended': s.present, 'Overall %': s.overall }
+    s.journey.forEach(m => { row[`${m.module} — ${m.title}`] = `${m.attended}/${m.classes} (${m.progress}%)` })
+    return row
+  }), 'AEMTECH_LearningJourney.xlsx', 'Journey')
+
+  return (
+    <div className="page-enter">
+      {/* Controls */}
+      <div style={{ display: 'flex', gap: 12, marginBottom: 22, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ minWidth: 210 }}>
+          <Sel label="" value={selBatch} onChange={e => setSelBatch(e.target.value)}>
+            <option value="">🏫 All Batches ({students.filter(s => s.status === 'active').length})</option>
+            {batches.map(b => <option key={b.id} value={b.id}>{b.name} ({students.filter(s => s.batch_id === b.id && s.status === 'active').length})</option>)}
+          </Sel>
+        </div>
+        <Search value={search} onChange={e => setSearch(e.target.value)} />
+        <Btn type="success" size="sm" onClick={doExport} icon="📊">Export</Btn>
+      </div>
+
+      {/* Summary */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 16, marginBottom: 24 }}>
+        <Stat icon="👥" value={withProgress.length} label="Students" />
+        <Stat icon="🚀" value={avgOverall + '%'} label="Avg Progress" color={attColor(avgOverall)} />
+        <Stat icon="📅" value={batchClasses} label="Classes Created" color="#3B82F6" />
+        <Stat icon="🎯" value={CURRICULUM_TOTAL} label="Curriculum Classes" color="#8B5CF6" />
+      </div>
+
+      {/* Module-wise batch progress */}
+      <Card title="🚀 Curriculum Progress (Batch Average)" icon="🚀" style={{ marginBottom: 22 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {moduleAvg.map(mod => (
+            <div key={mod.key} style={{ ...getGlassLight(dark), borderRadius: 16, padding: '18px 22px', display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
+              <div style={{ width: 50, height: 50, borderRadius: 14, background: `${mod.color}12`, border: `1px solid ${mod.color}25`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>{mod.icon}</div>
+              <div style={{ flex: 1, minWidth: 200 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 7, gap: 10 }}>
+                  <div>
+                    <span style={{ fontSize: 10, color: '#6B7280', textTransform: 'uppercase', letterSpacing: 1.2, fontWeight: 700 }}>{mod.module} · {mod.classes} {mod.classes === 1 ? 'class' : 'classes'}</span>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: dark ? '#E5E7EB' : '#1F2937', marginTop: 3 }}>{mod.title}</div>
+                  </div>
+                  <span style={{ fontSize: 17, fontWeight: 900, color: mod.color, fontFamily: "'Space Grotesk',sans-serif" }}>{mod.avg}%</span>
+                </div>
+                <PBar value={mod.avg} max={100} height={9} color={mod.color} />
+                <div style={{ display: 'flex', gap: 14, marginTop: 8, fontSize: 10, fontWeight: 700, flexWrap: 'wrap' }}>
+                  <span style={{ color: '#10B981' }}>✅ {mod.completed} done</span>
+                  <span style={{ color: '#F59E0B' }}>🔄 {mod.inProgress} ongoing</span>
+                  <span style={{ color: '#6B7280' }}>🔒 {mod.locked} locked</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* Per-student matrix */}
+      <Card title={`👥 Student Progress (${withProgress.length})`} icon="👥" noPadding>
+        <Tbl headers={['Student', ...CURRICULUM.map(m => `${m.icon} ${m.module}`), 'Overall']} empty={withProgress.length === 0 ? <Empty icon="🚀" title="No students" sub="Batch ya search filter badlein" /> : null}>
+          {withProgress.map((s, i) => (
+            <TR key={s.id} delay={i * .025}>
+              <TD>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <Av name={s.full_name} src={s.profile_image || null} size={34} />
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: dark ? '#E5E7EB' : '#1F2937' }}>{s.full_name}</div>
+                    <div style={{ fontSize: 10, color: '#6B7280' }}>{s.present} classes attended</div>
+                  </div>
+                </div>
+              </TD>
+              {s.journey.map(m => (
+                <TD key={m.key}>
+                  <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 56 }}>
+                    <span style={{ fontSize: 15 }}>{m.isLocked ? '🔒' : m.progress >= 100 ? '✅' : m.progress > 0 ? '🔄' : '⏳'}</span>
+                    <div style={{ width: 48 }}><PBar value={m.isLocked ? 0 : m.attended} max={m.classes} height={5} color={m.color} /></div>
+                    <span style={{ fontSize: 9, color: '#6B7280', whiteSpace: 'nowrap' }}>{m.attended}/{m.classes}</span>
+                  </div>
+                </TD>
+              ))}
+              <TD>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                  <div style={{ width: 70 }}><PBar value={s.overall} max={100} height={7} /></div>
+                  <span style={{ fontWeight: 800, fontSize: 13, color: attColor(s.overall), fontFamily: "'Space Grotesk',sans-serif" }}>{s.overall}%</span>
+                </div>
+              </TD>
+            </TR>
+          ))}
+        </Tbl>
+      </Card>
+    </div>
+  )
+}
+
+const pageTitles = { dashboard: '📊 Dashboard', students: '👥 Students', admissions: '📋 Admissions', batches: '🏫 Batches', classes: '📅 Classes', attendance: '✅ Attendance', assignments: '📝 Assignments', submissions: '📤 Submissions', recordings: '🎥 Recordings', fees: '💰 Fee Management', announcements: '📢 Announcements', certificates: '🎓 Certificates', leaderboard: '🏆 Leaderboard', sync: '🔄 Sheet Sync', excel: '📈 Import/Export', settings: '⚙️ Settings', certificate: '🎓 My Certificate', profile: '👤 My Profile', timetable: '🗓 Timetable', quizzes: '🧠 Quizzes', analytics: '📈 Analytics', progress: '📄 Progress Report', tasks: '🎯 Task Center', alerts: '🚨 Attendance Alerts', ledger: '📒 Fee Ledger', idcards: '🪪 ID Cards', reminders: '📣 WhatsApp Reminders', report: '📑 Monthly Report', promotion: '⏭ Batch Promotion', audit: '🕵️ Audit Log', journey: '🚀 Learning Journey' }
 
 function Portal() {
   const { isLoggedIn, isAdmin, isStudent, user } = useAuth()
@@ -5261,7 +5529,7 @@ function Portal() {
     return () => { sb.removeChannel(channel) }
   }, [isLoggedIn])
 
-  const adminPages = { dashboard: <AdminDashboard />, tasks: <TaskCenterPage />, students: <StudentsPage />, admissions: <AdmissionsPage />, batches: <BatchesPage />, classes: <ClassesPage />, attendance: <AttendancePage />, alerts: <AttendanceAlertsPage />, assignments: <AssignmentsPage />, submissions: <SubmissionsPage />, recordings: <RecordingsPage />, fees: <FeesPage />, ledger: <FeeLedgerPage />, announcements: <AnnouncementsPage />, certificates: <CertificatesPage />, leaderboard: <LeaderboardPage />, sync: <SheetSyncPage />, excel: <ExcelPage />, settings: <SettingsPage />, timetable: <TimetablePage />, quizzes: <QuizAdminPage />, analytics: <AnalyticsPage />, progress: <ProgressReportPage />, idcards: <IdCardsPage />, reminders: <RemindersPage />, report: <MonthlyReportPage />, promotion: <PromotionPage />, audit: <AuditLogPage /> }
+  const adminPages = { dashboard: <AdminDashboard />, tasks: <TaskCenterPage />, students: <StudentsPage />, admissions: <AdmissionsPage />, batches: <BatchesPage />, classes: <ClassesPage />, attendance: <AttendancePage />, alerts: <AttendanceAlertsPage />, assignments: <AssignmentsPage />, submissions: <SubmissionsPage />, recordings: <RecordingsPage />, fees: <FeesPage />, ledger: <FeeLedgerPage />, announcements: <AnnouncementsPage />, certificates: <CertificatesPage />, leaderboard: <LeaderboardPage />, sync: <SheetSyncPage />, excel: <ExcelPage />, settings: <SettingsPage />, timetable: <TimetablePage />, quizzes: <QuizAdminPage />, analytics: <AnalyticsPage />, progress: <ProgressReportPage />, idcards: <IdCardsPage />, reminders: <RemindersPage />, report: <MonthlyReportPage />, promotion: <PromotionPage />, audit: <AuditLogPage />, journey: <JourneyPage /> }
   const studentPages = { dashboard: <StudentDashboard />, attendance: <StudentAttendancePage />, assignments: <StudentAssignmentsPage />, recordings: <StudentRecordingsPage />, announcements: <StudentAnnouncementsPage />, fees: <StudentFeesPage />, certificate: <StudentCertificatePage />, profile: <StudentProfilePage />, timetable: <StudentTimetablePage />, quizzes: <StudentQuizPage /> }
 
   if (!isLoggedIn) return <LoginPage />
