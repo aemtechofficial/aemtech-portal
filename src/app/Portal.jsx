@@ -333,7 +333,7 @@ function NotificationProvider({ children }) {
 // ═══════════════════════════════════════
 // DESIGN SYSTEM — Sexy UI
 // ═══════════════════════════════════════
-const G = 'linear-gradient(135deg,#FFD700,#FFA500)'
+const G = 'linear-gradient(135deg,#FFE873,#FFD700 45%,#FFA500)'
 const G2 = 'linear-gradient(135deg,#10B981,#059669)'
 const G3 = 'linear-gradient(135deg,#3B82F6,#1D4ED8)'
 const tr = 'all .3s cubic-bezier(.4,0,.2,1)'
@@ -341,15 +341,16 @@ const chartTooltip = { contentStyle:{background:'rgba(13,13,13,.95)',border:'1px
 
 const isMobile = typeof window !== 'undefined' && window.innerWidth < 769
 const getGlass = d => ({
-  background: d ? 'rgba(12,12,14,.85)' : 'rgba(255,255,255,.92)',
-  ...(isMobile ? {} : { backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }),
-  border: `1px solid ${d ? 'rgba(255,215,0,.06)' : 'rgba(0,0,0,.05)'}`,
-  boxShadow: d ? '0 4px 24px rgba(0,0,0,.2)' : '0 4px 20px rgba(0,0,0,.04)',
+  background: d ? 'linear-gradient(160deg,rgba(22,22,27,.94),rgba(9,9,12,.92))' : 'rgba(255,255,255,.94)',
+  ...(isMobile ? {} : { backdropFilter: 'blur(22px)', WebkitBackdropFilter: 'blur(22px)' }),
+  border: `1px solid ${d ? 'rgba(255,215,0,.1)' : 'rgba(0,0,0,.05)'}`,
+  boxShadow: d ? '0 10px 36px rgba(0,0,0,.38), inset 0 1px 0 rgba(255,215,0,.06)' : '0 4px 20px rgba(0,0,0,.04)',
 })
 const getGlassLight = d => ({
-  background: d ? 'rgba(18,18,22,.7)' : 'rgba(248,248,250,.9)',
-  ...(isMobile ? {} : { backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }),
-  border: `1px solid ${d ? 'rgba(255,215,0,.04)' : 'rgba(0,0,0,.04)'}`,
+  background: d ? 'linear-gradient(160deg,rgba(26,26,32,.78),rgba(14,14,18,.72))' : 'rgba(248,248,250,.9)',
+  ...(isMobile ? {} : { backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }),
+  border: `1px solid ${d ? 'rgba(255,215,0,.07)' : 'rgba(0,0,0,.04)'}`,
+  boxShadow: d ? 'inset 0 1px 0 rgba(255,255,255,.03)' : 'none',
 })
 const getCardHover = d => ({
   borderColor: d ? 'rgba(255,215,0,.15)' : 'rgba(255,215,0,.3)',
@@ -506,8 +507,8 @@ const Modal = ({ open, onClose, title, children, footer, large=false, icon=null 
 
 const Card = ({ title, action, children, noPadding=false, delay=0, icon=null, style:cs={} }) => {
   const { dark } = useTheme()
-  return <div style={{...getGlass(dark),borderRadius:22,marginBottom:26,overflow:'hidden',animation:`fadeInUp .4s ease ${delay}s both`,...cs}}>
-    <div style={{padding:'22px 28px',borderBottom:`1px solid ${dark?'rgba(255,215,0,.05)':'rgba(0,0,0,.04)'}`,display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:12,background:dark?'linear-gradient(90deg,rgba(255,215,0,.01),transparent)':'linear-gradient(90deg,rgba(255,215,0,.03),transparent)'}}>
+  return <div style={{...getGlass(dark),borderRadius:24,marginBottom:26,overflow:'hidden',animation:`fadeInUp .4s ease ${delay}s both`,...cs}}>
+    <div style={{padding:'22px 28px',borderBottom:`1px solid ${dark?'rgba(255,215,0,.05)':'rgba(0,0,0,.04)'}`,display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:12,background:dark?'linear-gradient(90deg,rgba(255,215,0,.045),transparent 55%)':'linear-gradient(90deg,rgba(255,215,0,.03),transparent)'}}>
       <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:16,fontWeight:700,display:'flex',alignItems:'center',gap:12,color:dark?'#E5E7EB':'#1F2937'}}>
         <div style={{width:3,height:24,background:G,borderRadius:4,boxShadow:'0 0 12px rgba(255,215,0,.25)'}}/>{icon&&<span style={{fontSize:17,filter:'drop-shadow(0 0 4px rgba(255,215,0,.15))'}}>{icon}</span>}{title}
       </div>
@@ -637,7 +638,7 @@ function Sidebar({ page, setPage, mobileOpen, setMobileOpen }) {
     <>
       {mobileOpen && <div onClick={() => setMobileOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.65)', zIndex: 199, backdropFilter: 'blur(4px)' }} />}
       <div className="cs" style={{
-        width: 275, background: dark ? '#000000' : '#FFFFFF',
+        width: 275, background: dark ? 'linear-gradient(180deg,#050506 0%,#0A0A0D 55%,#070708 100%)' : '#FFFFFF',
         position: 'fixed', left: 0, top: 0, bottom: 0, zIndex: 200,
         display: 'flex', flexDirection: 'column', overflowY: 'auto',
         borderRight: `1px solid ${dark ? 'rgba(255,215,0,.04)' : 'rgba(0,0,0,.05)'}`,
@@ -657,8 +658,8 @@ function Sidebar({ page, setPage, mobileOpen, setMobileOpen }) {
         {/* User Card */}
         <div style={{
           margin: '18px 16px 12px', padding: '18px 20px', borderRadius: 18,
-          background: dark ? 'rgba(255,215,0,.015)' : 'rgba(255,215,0,.03)',
-          border: `1px solid ${dark ? 'rgba(255,215,0,.04)' : 'rgba(255,215,0,.08)'}`,
+          background: dark ? 'linear-gradient(150deg,rgba(255,215,0,.06),rgba(255,215,0,.012))' : 'rgba(255,215,0,.03)',
+          border: `1px solid ${dark ? 'rgba(255,215,0,.12)' : 'rgba(255,215,0,.08)'}`,
           display: 'flex', alignItems: 'center', gap: 14,
           boxShadow: dark ? '0 2px 12px rgba(0,0,0,.2)' : '0 2px 8px rgba(0,0,0,.03)',
         }}>
@@ -687,7 +688,7 @@ function Sidebar({ page, setPage, mobileOpen, setMobileOpen }) {
                       display: 'flex', alignItems: 'center', gap: 14, padding: '12px 28px',
                       cursor: 'pointer', fontSize: 13, fontWeight: isA ? 700 : 500, transition: tr,
                       color: isA ? '#FFD700' : isH ? (dark ? '#E5E7EB' : '#1F2937') : '#6B7280',
-                      background: isA ? (dark ? 'rgba(255,215,0,.06)' : 'rgba(255,215,0,.08)') : isH ? (dark ? 'rgba(255,255,255,.015)' : 'rgba(0,0,0,.015)') : 'transparent',
+                      background: isA ? (dark ? 'linear-gradient(90deg,rgba(255,215,0,.13),rgba(255,215,0,.02))' : 'rgba(255,215,0,.08)') : isH ? (dark ? 'rgba(255,255,255,.015)' : 'rgba(0,0,0,.015)') : 'transparent',
                       borderLeft: isA ? '3px solid #FFD700' : '3px solid transparent',
                       margin: '2px 0', position: 'relative',
                     }}>
@@ -718,7 +719,7 @@ function Sidebar({ page, setPage, mobileOpen, setMobileOpen }) {
             fontSize: 13, fontWeight: 700, width: '100%', fontFamily: "'Inter',sans-serif", transition: tr,
           }}>🚪 Sign Out</button>
 
-          <div style={{ textAlign: 'center', marginTop: 16, fontSize: 10, color: dark ? '#1A1A1A' : '#D1D5DB', fontWeight: 600, letterSpacing: 1.5 }}>v3.2 — AEMTECH Portal</div>
+          <div style={{ textAlign: 'center', marginTop: 16, fontSize: 10, color: dark ? '#1A1A1A' : '#D1D5DB', fontWeight: 600, letterSpacing: 1.5 }}>v3.3 · AEMTECH Portal</div>
         </div>
       </div>
     </>
@@ -915,10 +916,10 @@ function LoginPage() {
         
         <div style={{
           background: 'rgba(12,12,14,.9)', backdropFilter: 'blur(20px)', WebkitBackdropFilter:'blur(20px)',
-          border: '1px solid rgba(255,215,0,.08)', borderRadius: 28,
+          border: '1px solid rgba(255,215,0,.16)', borderRadius: 28,
           padding: 'clamp(30px, 5vw, 52px) clamp(24px, 4vw, 44px)', width: '100%', maxWidth: 440,
           animation: 'slideUp .5s ease',
-          boxShadow: '0 24px 60px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,215,0,.05)',
+          boxShadow: '0 30px 80px rgba(0,0,0,.6), 0 0 70px rgba(255,215,0,.05), inset 0 1px 0 rgba(255,215,0,.09)',
           position:'relative', overflow:'hidden',
         }}>
           {/* Card glow accent */}
@@ -961,7 +962,7 @@ function LoginPage() {
 
           <Btn onClick={go} loading={loading} full size="lg" style={{ marginTop: 4, borderRadius: 16, fontSize: 16, padding: '18px 32px', letterSpacing: .5, boxShadow:'0 8px 30px rgba(255,215,0,.2)' }}>✨ Sign In</Btn>
 
-          <div style={{ textAlign: 'center', marginTop: 30, fontSize: 11, color: '#1A1A1A', letterSpacing:1 }}>© 2025 AEMTECH — Design the Future ✦</div>
+          <div style={{ textAlign: 'center', marginTop: 30, fontSize: 11, color: '#1A1A1A', letterSpacing:1 }}>© 2026 AEMTECH · Design the Future ✦</div>
         </div>
       </div>
     </div>
@@ -2364,7 +2365,7 @@ function BatchesPage(){const[batches,setBatches]=useState([]);const[loading,setL
 
 function ClassesPage(){const[classes,setClasses]=useState([]);const[batches,setBatches]=useState([]);const[loading,setLoading]=useState(true);const[modal,setModal]=useState(false);const[form,setForm]=useState({});const[filters,setFilters]=useState({});const load=useCallback(async()=>{setLoading(true);const[c,b]=await Promise.all([sb.from('classes').select('*').order('class_number'),sb.from('batches').select('*')]);setClasses(c.data||[]);setBatches(b.data||[]);setLoading(false)},[]);useEffect(()=>{load()},[load]);const save=async()=>{if(!form.class_number||!form.title||!form.batch_id){toast.error('Required');return};const data={...form,class_number:parseInt(form.class_number)};if(form.id){await sb.from('classes').update(data).eq('id',form.id)}else{await sb.from('classes').insert({...data,status:form.status||'scheduled'})};toast.success('Saved!');setModal(false);load()};const{confirm}=useConfirm();const del=async id=>{confirm({title:'Delete Class?',message:'Yeh class aur iski attendance delete ho jayegi.',type:'danger',confirmText:'Delete',icon:'🗑️'}).then(async ok=>{if(!ok)return;await sb.from('attendance').delete().eq('class_id',id);await sb.from('classes').delete().eq('id',id);toast.success('Deleted');load()})};const filtered=classes.filter(c=>{if(filters.batch&&c.batch_id!==filters.batch)return false;if(filters.status&&c.status!==filters.status)return false;return true});if(loading)return <SkeletonDashboard/>;return(<><FilterBar filters={[{key:'batch',label:'Batch',options:batches.map(b=>({value:b.id,label:b.name}))},{key:'status',label:'Status',options:['scheduled','live','completed']}]} values={filters} onChange={setFilters}/><Card title={`Classes (${filtered.length})`} icon="📅" action={<Btn onClick={()=>{setForm({status:'scheduled'});setModal(true)}} icon="➕">Add</Btn>} noPadding><Tbl headers={['#','Title','Batch','Date','Time','Recording','Status','Actions']} empty={filtered.length===0?<Empty icon="📅" title="No classes"/>:null}>{filtered.map((c,i)=>(<TR key={c.id} delay={i*.04}><TD><Bdg type="gold">C{c.class_number}</Bdg></TD><TD style={{fontWeight:600,maxWidth:230,color:'#E5E7EB',whiteSpace:'normal',wordBreak:'break-word',lineHeight:1.45,overflow:'hidden',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',verticalAlign:'middle'}}>{c.title}</TD><TD style={{fontSize:12}}>{batches.find(b=>b.id===c.batch_id)?.name||'—'}</TD><TD style={{fontSize:12}}>{fmtDate(c.date)}</TD><TD style={{fontSize:12}}>{c.time||'—'}</TD><TD>{c.recording_url?<a href={c.recording_url} target="_blank" rel="noreferrer" style={{color:'#FFD700',fontSize:12,fontWeight:600}}>▶</a>:'—'}</TD><TD><Bdg type={statusBadge(c.status)} dot>{c.status}</Bdg></TD><TD><div style={{display:'flex',gap:6}}><Btn type="outline" size="xs" onClick={()=>{setForm(c);setModal(true)}}>✏️</Btn><Btn type="danger" size="xs" onClick={()=>del(c.id)}>🗑</Btn></div></TD></TR>))}</Tbl></Card><Modal open={modal} onClose={()=>setModal(false)} title={form.id?'Edit':'Add Class'} icon="📅" footer={<><Btn type="ghost" onClick={()=>setModal(false)}>Cancel</Btn><Btn onClick={save}>Save</Btn></>}><Grid><Inp label="#" required type="number" value={form.class_number||''} onChange={e=>setForm({...form,class_number:e.target.value})}/><Sel label="Batch" required value={form.batch_id||''} onChange={e=>setForm({...form,batch_id:e.target.value})}><option value="">Select</option>{batches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</Sel></Grid><Inp label="Title" required value={form.title||''} onChange={e=>setForm({...form,title:e.target.value})}/><Grid><Inp label="Date" type="date" value={form.date||''} onChange={e=>setForm({...form,date:e.target.value})}/><Inp label="Time" value={form.time||''} onChange={e=>setForm({...form,time:e.target.value})}/></Grid><Inp label="Recording" value={form.recording_url||''} onChange={e=>setForm({...form,recording_url:e.target.value})}/><Sel label="Status" value={form.status||'scheduled'} onChange={e=>setForm({...form,status:e.target.value})}><option value="scheduled">Scheduled</option><option value="live">Live</option><option value="completed">Completed</option></Sel><TA label="Notes" value={form.notes||''} onChange={e=>setForm({...form,notes:e.target.value})}/></Modal></>)}
 
-function AttendancePage(){const[batches,setBatches]=useState([]);const[classes,setClasses]=useState([]);const[students,setStudents]=useState([]);const[att,setAtt]=useState({});const[selB,setSelB]=useState('');const[selC,setSelC]=useState('');const[repB,setRepB]=useState('');const[report,setReport]=useState([]);const[saving,setSaving]=useState(false);const{dark}=useTheme();useEffect(()=>{sb.from('batches').select('*').then(r=>setBatches(r.data||[]))},[]);const loadC=async bid=>{setSelB(bid);setSelC('');setStudents([]);const{data}=await sb.from('classes').select('*').eq('batch_id',bid).order('class_number');setClasses(data||[])};const loadS=async cid=>{setSelC(cid);const[s,a]=await Promise.all([sb.from('students').select('*').eq('batch_id',selB).eq('status','active'),sb.from('attendance').select('*').eq('class_id',cid)]);const map={};(a.data||[]).forEach(x=>map[x.student_id]=x.status);const state={};(s.data||[]).forEach(x=>state[x.id]=map[x.id]||'absent');setStudents(s.data||[]);setAtt(state)};const toggle=id=>{const states=['present','absent','late'];setAtt(p=>({...p,[id]:states[(states.indexOf(p[id]||'absent')+1)%3]}))};const markAll=st=>{const n={};students.forEach(s=>n[s.id]=st);setAtt(n)};const save=async()=>{if(!selC)return;setSaving(true);await sb.from('attendance').delete().eq('class_id',selC);await sb.from('attendance').insert(students.map(s=>({class_id:selC,student_id:s.id,status:att[s.id]||'absent'})));toast.success('Saved!');const[allA,allS,allC]=await Promise.all([sb.from('attendance').select('*'),sb.from('students').select('*'),sb.from('classes').select('*')]);await syncToSheet('syncAttendance',{records:(allA.data||[]).map(a=>({student_name:allS.data?.find(s=>s.id===a.student_id)?.full_name||'',class_number:allC.data?.find(c=>c.id===a.class_id)?.class_number||'',class_title:allC.data?.find(c=>c.id===a.class_id)?.title||'',date:fmtDate(a.marked_at||new Date()),status:a.status}))});setSaving(false)};const loadReport=async bid=>{setRepB(bid);const[s,c]=await Promise.all([sb.from('students').select('*').eq('batch_id',bid),sb.from('classes').select('*').eq('batch_id',bid)]);const total=(c.data||[]).length;const rows=await Promise.all((s.data||[]).map(async st=>{const{data:a}=await sb.from('attendance').select('*').eq('student_id',st.id);const present=(a||[]).filter(x=>x.status==='present').length;return{...st,present,total,pct:total>0?Math.round((present/total)*100):0}}));setReport(rows)};const attColors={present:{border:'rgba(16,185,129,.4)',bg:'rgba(16,185,129,.05)',color:'#10B981'},absent:{border:'rgba(239,68,68,.4)',bg:'rgba(239,68,68,.05)',color:'#EF4444'},late:{border:'rgba(245,158,11,.4)',bg:'rgba(245,158,11,.05)',color:'#F59E0B'}};return(<div><Card title="✅ Mark Attendance" icon="✅" action={<Btn type="outline" size="sm" icon="📊" onClick={()=>openSheet('attendance')}>Sheet</Btn>}><Grid gap={18} style={{marginBottom:22}}><Sel label="Batch" value={selB} onChange={e=>loadC(e.target.value)}><option value="">Select</option>{batches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</Sel><Sel label="Class" value={selC} onChange={e=>loadS(e.target.value)}><option value="">Select</option>{classes.map(c=><option key={c.id} value={c.id}>C{c.class_number} — {c.title}</option>)}</Sel></Grid>{students.length>0&&<><div style={{display:'flex',gap:10,marginBottom:18}}><Btn type="success" size="sm" onClick={()=>markAll('present')}>✅ All Present</Btn><Btn type="danger" size="sm" onClick={()=>markAll('absent')}>❌ All Absent</Btn><Btn type="warning" size="sm" onClick={()=>markAll('late')}>⏰ Late</Btn></div><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(135px,1fr))',gap:12,marginBottom:22}}>{students.map(s=>{const st=att[s.id]||'absent';const c=attColors[st]||attColors.absent;return(<div key={s.id} onClick={()=>toggle(s.id)} style={{background:c.bg,border:`1.5px solid ${c.border}`,borderRadius:14,padding:16,textAlign:'center',cursor:'pointer',transition:tr}}><Av name={s.full_name} size={44}/><div style={{fontSize:12,fontWeight:700,marginTop:9,color:dark?'#E5E7EB':'#1F2937'}}>{s.full_name.split(' ')[0]}</div><div style={{fontSize:10,textTransform:'uppercase',letterSpacing:1.2,marginTop:5,color:c.color,fontWeight:700}}>{st}</div></div>)})}</div><Btn onClick={save} disabled={saving} loading={saving}>{saving?'Saving...':'💾 Save & Sync'}</Btn></>}</Card><Card title="📊 Report" icon="📊" action={report.length>0?<Btn type="success" size="sm" onClick={()=>exportXLS(report.map(s=>({Student:s.full_name,Present:s.present,Total:s.total,'%':s.pct+'%'})),'Attendance.xlsx')} icon="📊">Export</Btn>:null}><Sel label="Batch" value={repB} onChange={e=>loadReport(e.target.value)}><option value="">Select</option>{batches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</Sel>{report.length>0&&<Tbl headers={['Student','Present','Total','Attendance','Status']}>{report.map((s,i)=>(<TR key={s.id} delay={i*.04}><TD><div style={{display:'flex',alignItems:'center',gap:8}}><Av name={s.full_name} size={32}/><span style={{fontWeight:600}}>{s.full_name}</span></div></TD><TD style={{color:'#10B981',fontWeight:700}}>{s.present}</TD><TD>{s.total}</TD><TD><div style={{display:'flex',alignItems:'center',gap:10}}><div style={{width:85}}><PBar value={s.present} max={s.total}/></div><span style={{fontWeight:700,color:attColor(s.pct)}}>{s.pct}%</span></div></TD><TD><Bdg type={s.pct>=80?'success':s.pct>=60?'warning':'danger'} dot>{s.pct>=80?'Good':'<80%'}</Bdg></TD></TR>))}</Tbl>}</Card></div>)}
+function AttendancePage(){const[batches,setBatches]=useState([]);const[classes,setClasses]=useState([]);const[students,setStudents]=useState([]);const[att,setAtt]=useState({});const[selB,setSelB]=useState('');const[selC,setSelC]=useState('');const[repB,setRepB]=useState('');const[report,setReport]=useState([]);const[saving,setSaving]=useState(false);const{dark}=useTheme();useEffect(()=>{sb.from('batches').select('*').then(r=>setBatches(r.data||[]))},[]);const loadC=async bid=>{setSelB(bid);setSelC('');setStudents([]);const{data}=await sb.from('classes').select('*').eq('batch_id',bid).order('class_number');setClasses(data||[])};const loadS=async cid=>{setSelC(cid);const[s,a]=await Promise.all([sb.from('students').select('*').eq('batch_id',selB).eq('status','active'),sb.from('attendance').select('*').eq('class_id',cid)]);const map={};(a.data||[]).forEach(x=>map[x.student_id]=x.status);const state={};(s.data||[]).forEach(x=>state[x.id]=map[x.id]||'absent');setStudents(s.data||[]);setAtt(state)};const toggle=id=>{const states=['present','absent','late'];setAtt(p=>({...p,[id]:states[(states.indexOf(p[id]||'absent')+1)%3]}))};const markAll=st=>{const n={};students.forEach(s=>n[s.id]=st);setAtt(n)};const save=async()=>{if(!selC)return;setSaving(true);await sb.from('attendance').delete().eq('class_id',selC);await sb.from('attendance').insert(students.map(s=>({class_id:selC,student_id:s.id,status:att[s.id]||'absent'})));toast.success('Saved!');const[allA,allS,allC]=await Promise.all([sb.from('attendance').select('*'),sb.from('students').select('*'),sb.from('classes').select('*')]);await syncToSheet('syncAttendance',{records:(allA.data||[]).map(a=>({student_name:allS.data?.find(s=>s.id===a.student_id)?.full_name||'',class_number:allC.data?.find(c=>c.id===a.class_id)?.class_number||'',class_title:allC.data?.find(c=>c.id===a.class_id)?.title||'',date:fmtDate(a.marked_at||new Date()),status:a.status}))});setSaving(false)};const loadReport=async bid=>{setRepB(bid);const[s,c]=await Promise.all([sb.from('students').select('*').eq('batch_id',bid),sb.from('classes').select('*').eq('batch_id',bid)]);const total=(c.data||[]).length;const rows=await Promise.all((s.data||[]).map(async st=>{const{data:a}=await sb.from('attendance').select('*').eq('student_id',st.id);const present=(a||[]).filter(x=>x.status==='present').length;return{...st,present,total,pct:total>0?Math.round((present/total)*100):0}}));setReport(rows)};const attColors={present:{border:'rgba(16,185,129,.4)',bg:'rgba(16,185,129,.05)',color:'#10B981'},absent:{border:'rgba(239,68,68,.4)',bg:'rgba(239,68,68,.05)',color:'#EF4444'},late:{border:'rgba(245,158,11,.4)',bg:'rgba(245,158,11,.05)',color:'#F59E0B'}};return(<div><Card title="✅ Mark Attendance" icon="✅" action={<Btn type="outline" size="sm" icon="📊" onClick={()=>openSheet('attendance')}>Sheet</Btn>}><Grid gap={18} style={{marginBottom:22}}><Sel label="Batch" value={selB} onChange={e=>loadC(e.target.value)}><option value="">Select</option>{batches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</Sel><Sel label="Class" value={selC} onChange={e=>loadS(e.target.value)}><option value="">Select</option>{classes.map(c=><option key={c.id} value={c.id}>C{c.class_number} — {c.title}</option>)}</Sel></Grid>{students.length>0&&<><div style={{display:'flex',gap:10,marginBottom:18}}><Btn type="success" size="sm" onClick={()=>markAll('present')}>✅ All Present</Btn><Btn type="danger" size="sm" onClick={()=>markAll('absent')}>❌ All Absent</Btn><Btn type="warning" size="sm" onClick={()=>markAll('late')}>⏰ Late</Btn></div><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(185px,1fr))',gap:14,marginBottom:22}}>{students.map(s=>{const st=att[s.id]||'absent';const c=attColors[st]||attColors.absent;return(<div key={s.id} className="ch" onClick={()=>toggle(s.id)} title={s.full_name} style={{background:c.bg,border:`1.5px solid ${c.border}`,borderRadius:16,padding:'18px 14px',textAlign:'center',cursor:'pointer',transition:tr}}><Av name={s.full_name} size={48}/><div style={{fontSize:13,fontWeight:700,marginTop:10,lineHeight:1.35,wordBreak:'break-word',color:dark?'#E5E7EB':'#1F2937'}}>{s.full_name}</div><div style={{fontSize:10,textTransform:'uppercase',letterSpacing:1.2,marginTop:5,color:c.color,fontWeight:700}}>{st}</div></div>)})}</div><Btn onClick={save} disabled={saving} loading={saving}>{saving?'Saving...':'💾 Save & Sync'}</Btn></>}</Card><Card title="📊 Report" icon="📊" action={report.length>0?<Btn type="success" size="sm" onClick={()=>exportXLS(report.map(s=>({Student:s.full_name,Present:s.present,Total:s.total,'%':s.pct+'%'})),'Attendance.xlsx')} icon="📊">Export</Btn>:null}><Sel label="Batch" value={repB} onChange={e=>loadReport(e.target.value)}><option value="">Select</option>{batches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</Sel>{report.length>0&&<Tbl headers={['Student','Present','Total','Attendance','Status']}>{report.map((s,i)=>(<TR key={s.id} delay={i*.04}><TD><div style={{display:'flex',alignItems:'center',gap:8}}><Av name={s.full_name} size={32}/><span style={{fontWeight:600}}>{s.full_name}</span></div></TD><TD style={{color:'#10B981',fontWeight:700}}>{s.present}</TD><TD>{s.total}</TD><TD><div style={{display:'flex',alignItems:'center',gap:10}}><div style={{width:85}}><PBar value={s.present} max={s.total}/></div><span style={{fontWeight:700,color:attColor(s.pct)}}>{s.pct}%</span></div></TD><TD><Bdg type={s.pct>=80?'success':s.pct>=60?'warning':'danger'} dot>{s.pct>=80?'Good':'<80%'}</Bdg></TD></TR>))}</Tbl>}</Card></div>)}
 
 function AssignmentsPage(){
   const[assignments,setAssignments]=useState([]);const[batches,setBatches]=useState([]);const[classes,setClasses]=useState([]);const[loading,setLoading]=useState(true);const[modal,setModal]=useState(false);const[form,setForm]=useState({});const[filters,setFilters]=useState({})
@@ -3587,7 +3588,7 @@ function StudentProfilePage() {
 }
 
 // ═══════════════════════════════════════
-// MAIN APP — v3.2 FINAL
+// MAIN APP · v3.3 PREMIUM
 // ═══════════════════════════════════════
 // ═══════════════════════════════════════
 // STUDENT LEADERBOARD
